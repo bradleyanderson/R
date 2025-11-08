@@ -1,0 +1,10 @@
+./setup.py
+./resolveai/__init__.py
+./resolveai/core/assistant.py
+./resolveai/core/universal_assistant.py
+./resolveai/security/encryption.py
+./resolveai/config/settings.py
+./resolveai/cloud/cloud_manager.py
+./resolveai/davinci/api.py
+./resolveai/server/api.py
+./resolveai/universal/screen_intelligence.py

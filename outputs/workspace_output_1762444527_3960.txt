@@ -1,0 +1,19 @@
+total 68
+drwxr-xr-x 7 root root  4096 Nov  6 15:55 .
+drwxr-xr-x 1 root root   162 Nov  6 14:27 ..
+-rw-r--r-- 1 root root    29 Nov  6 15:15 .created
+-rw-r--r-- 1 root root  1330 Nov  6 15:02 .env.example
+-rw-r--r-- 1 root root  3303 Nov  6 15:08 .gitignore
+-rw-r--r-- 1 root root  7922 Nov  6 15:04 CONTRIBUTING.md
+-rw-r--r-- 1 root root  1332 Nov  6 15:02 Dockerfile
+-rw-r--r-- 1 root root  1078 Nov  6 14:35 LICENSE
+-rw-r--r-- 1 root root 17050 Nov  6 15:54 README.md
+-rw-r--r-- 1 root root  3456 Nov  6 15:01 docker-compose.yml
+drwxr-xr-x 2 root root    35 Nov  6 15:11 docs
+drwxr-xr-x 2 root root   154 Nov  6 15:55 outputs
+-rw-r--r-- 1 root root  1599 Nov  6 14:36 requirements.txt
+drwxr-xr-x 9 root root   162 Nov  6 15:47 resolveai
+drwxr-xr-x 2 root root    30 Nov  6 15:06 scripts
+-rw-r--r-- 1 root root  2944 Nov  6 14:37 setup.py
+drwxr-xr-x 2 root root    63 Nov  6 15:55 summarized_conversations
+-rw-r--r-- 1 root root  2282 Nov  6 15:47 todo.md
