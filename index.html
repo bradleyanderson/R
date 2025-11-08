@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResolveAI - Universal AI Assistant Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #e0e0e0;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 60px 20px;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            margin-bottom: 40px;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            font-size: 3.5em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            font-size: 1.4em;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+
+        .tagline {
+            font-size: 1.2em;
+            font-style: italic;
+            opacity: 0.8;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .feature-card {
+            background: rgba(20, 20, 40, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transform: translateY(0);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.7);
+            background: rgba(25, 25, 50, 0.95);
+        }
+
+        .feature-icon {
+            font-size: 2.5em;
+            margin-bottom: 15px;
+        }
+
+        .feature-title {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: #7c3aed;
+        }
+
+        .feature-description {
+            color: #b0b0c0;
+            line-height: 1.6;
+        }
+
+        .tech-stack {
+            background: rgba(20, 20, 40, 0.9);
+            padding: 40px;
+            border-radius: 15px;
+            margin-bottom: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tech-stack h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #7c3aed;
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .tech-item {
+            text-align: center;
+            padding: 20px;
+            background: rgba(30, 30, 60, 0.6);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .tech-name {
+            font-weight: bold;
+            color: #e0e0e0;
+            margin-bottom: 5px;
+        }
+
+        .tech-desc {
+            font-size: 0.9em;
+            color: #b0b0c0;
+        }
+
+        .cta-section {
+            text-align: center;
+            padding: 60px 20px;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #7c3aed;
+            color: white;
+            border: 1px solid rgba(124, 58, 237, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: #6d28d9;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(124, 58, 237, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin: 40px 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1em;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5em;
+            }
+            
+            .subtitle {
+                font-size: 1.2em;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+            
+            .tech-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+        }
+    </style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 ResolveAI</h1>
+            <div class="subtitle">Universal AI Assistant Platform</div>
+            <div class="tagline">The Operating System for AI-Human Interaction Across All Technology</div>
+        </header>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-number">7</div>
+                <div class="stat-label">Core Capabilities</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">∞</div>
+                <div class="stat-label">Applications Supported</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">🔌</div>
+                <div class="stat-label">Plugin Ecosystem</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">🌐</div>
+                <div class="stat-label">Multi-Cloud Ready</div>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">👁️</div>
+                <div class="feature-title">Universal Screen Intelligence</div>
+                <div class="feature-description">
+                    Advanced computer vision that can see, understand, and interact with any software interface. Real-time UI element detection, text extraction, and layout analysis across all platforms.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <div class="feature-title">Cross-Application Automation</div>
+                <div class="feature-description">
+                    Workflow orchestration across multiple software platforms. Learn from user interactions to create intelligent automations that work seamlessly between different applications.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">💬</div>
+                <div class="feature-title">Conversational Interface Control</div>
+                <div class="feature-description">
+                    Natural language control of any software. Simply describe what you want to accomplish, and ResolveAI translates it into precise actions across your digital workspace.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🧠</div>
+                <div class="feature-title">Adaptive Learning Engine</div>
+                <div class="feature-description">
+                    Personalized AI that learns your preferences, remembers your workflows, and adapts to your unique way of working. Gets smarter with every interaction.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔌</div>
+                <div class="feature-title">Plugin Ecosystem</div>
+                <div class="feature-description">
+                    Extensible framework with unlimited integrations. Community-driven plugins for specialized workflows, custom integrations, and industry-specific tools.
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🌐</div>
+                <div class="feature-title">Real-Time Collaboration</div>
+                <div class="feature-description">
+                    Shared AI workspaces with real-time synchronization. Collaborate across different tools and platforms while maintaining context and workflow continuity.
+                </div>
+            </div>
+        </div>
+
+        <div class="tech-stack">
+            <h2>🛠️ Built with Modern Technology</h2>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <div class="tech-name">Python</div>
+                    <div class="tech-desc">Core Platform</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-name">FastAPI</div>
+                    <div class="tech-desc">REST API Server</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-name">OpenCV</div>
+                    <div class="tech-desc">Computer Vision</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-name">Docker</div>
+                    <div class="tech-desc">Container Platform</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-name">Redis</div>
+                    <div class="tech-desc">Caching Layer</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-name">WebSocket</div>
+                    <div class="tech-desc">Real-time Communication</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-name">AWS/Azure/GCP</div>
+                    <div class="tech-desc">Multi-Cloud Support</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-name">AES-256</div>
+                    <div class="tech-desc">Enterprise Security</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cta-section">
+            <h2>🚀 Ready to Transform Your Digital Workflow?</h2>
+            <p>Join the revolution in AI-human interaction and experience the future of universal computing.</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/resolveai/resolveai" class="btn btn-primary">Get Started on GitHub</a>
+                <a href="#docs" class="btn btn-secondary">View Documentation</a>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2024 ResolveAI. Open Source Universal AI Assistant Platform.</p>
+            <p>Built with ❤️ by the global AI community</p>
+        </footer>
+    </div>
+
+    <script>
+        // Add some interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate stats on scroll
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.animation = 'fadeInUp 0.6s ease forwards';
+                    }
+                });
+            });
+
+            document.querySelectorAll('.stat-item').forEach(item => {
+                observer.observe(item);
+            });
+        });
+
+        // Add CSS animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeInUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(30px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
