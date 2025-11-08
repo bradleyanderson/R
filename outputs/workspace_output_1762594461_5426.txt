@@ -7,11 +7,11 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
 setup(
-    name="resolveai-universal",
-    version="2.0.0",
+    name="resolveai-assistant",
+    version="1.0.0",
     author="ResolveAI Contributors",
     author_email="contributors@resolveai.ai",
-    description="Universal AI Assistant Platform - Control any software with AI",
+    description="Open Source AI Assistant for DaVinci Resolve Video Editing",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/resolveai/resolveai-assistant",
@@ -22,26 +22,22 @@ setup(
     },
     packages=find_packages(exclude=["tests*", "docs*", "examples*"]),
     classifiers=[
-        "Development Status :: 5 - Production/Stable",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: End Users/Desktop",
-        "Intended Audience :: System Administrators",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
         "Topic :: Multimedia :: Video",
         "Topic :: Multimedia :: Video :: Display",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Software Development :: Libraries :: Python Modules",
-        "Topic :: System :: Automation",
-        "Topic :: System :: Shells",
-        "Topic :: Utilities",
     ],
-    python_requires=">=3.9",
+    python_requires=">=3.8",
     install_requires=requirements,
     extras_require={
         "dev": [
@@ -71,9 +67,9 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "resolveai=cli:main",
-            "resolveai-server=resolveai.server.api:main",
-            "resolveai-plugin=resolveai.universal.plugin_system:main",
+            "resolveai=resolveai.cli:main",
+            "resolveai-server=resolveai.server:main",
+            "resolveai-plugin=resolveai.plugin:main",
         ],
     },
     include_package_data=True,

@@ -1,0 +1,26 @@
+On branch resolveai-universal-platform
+Your branch is up to date with 'origin/resolveai-universal-platform'.
+
+You have unmerged paths.
+  (fix conflicts and run "git commit")
+  (use "git merge --abort" to abort the merge)
+
+Unmerged paths:
+  (use "git add <file>..." to mark resolution)
+	both added:      README.md
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	outputs/workspace_output_1762593151_2207.txt
+	outputs/workspace_output_1762593153_2222.txt
+	outputs/workspace_output_1762593157_1167.txt
+	outputs/workspace_output_1762593323_2400.txt
+	outputs/workspace_output_1762593328_4276.txt
+	outputs/workspace_output_1762593330_2455.txt
+	outputs/workspace_output_1762593333_591.txt
+	outputs/workspace_output_1762593337_4846.txt
+	outputs/workspace_output_1762593340_1664.txt
+	outputs/workspace_output_1762593342_7633.txt
+	outputs/workspace_output_1762593344_2473.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")

@@ -1,0 +1,3 @@
+From https://github.com/bradleyanderson/R
+ * branch            main       -> FETCH_HEAD
+ * [new branch]      main       -> origin/main

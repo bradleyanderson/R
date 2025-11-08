@@ -1,0 +1,7 @@
+remote: 
+remote: Create a pull request for 'resolveai-universal-platform' on GitHub by visiting:        
+remote:      https://github.com/bradleyanderson/R/pull/new/resolveai-universal-platform        
+remote: 
+To https://github.com/bradleyanderson/R.git
+ * [new branch]      resolveai-universal-platform -> resolveai-universal-platform
+branch 'resolveai-universal-platform' set up to track 'origin/resolveai-universal-platform'.

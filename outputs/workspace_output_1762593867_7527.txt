@@ -1,0 +1,5 @@
+cab508a Merge pull request #1 from bradleyanderson/resolveai-universal-platform
+56be534 🌙 Apply darker theme to landing page
+14d4f89 Merge with main branch, keeping ResolveAI universal platform documentation
+517df05 Initial commit: ResolveAI Universal AI Assistant Platform
+7428f8e Initial commit

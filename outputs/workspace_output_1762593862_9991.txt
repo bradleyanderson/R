@@ -1,0 +1,8 @@
+From https://github.com/bradleyanderson/R
+ * branch            main       -> FETCH_HEAD
+   7428f8e..cab508a  main       -> origin/main
+Updating 517df05..cab508a
+Fast-forward
+ README.md  | 406 +------------------------------------------------------------
+ index.html |  56 +++++----
+ 2 files changed, 34 insertions(+), 428 deletions(-)

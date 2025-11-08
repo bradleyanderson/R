@@ -1,0 +1,50 @@
+"""
+Universal Screen Intelligence System
+
+Advanced computer vision capable of recognizing and understanding any application
+interface, web page, or digital workspace in real-time.
+"""
+
+import asyncio
+import logging
+import numpy as np
+import cv2
+from typing import Dict, Any, List, Optional, Tuple
+from dataclasses import dataclass
+import time
+import json
+from enum import Enum
+
+try:
+    import torch
+    import torchvision.transforms as transforms
+    from transformers import AutoProcessor, AutoModelForVision2Seq
+    VISION_AVAILABLE = True
+except ImportError:
+    VISION_AVAILABLE = False
+
+try:
+    import pytesseract
+    from PIL import Image
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
+
+class InterfaceType(Enum):
+    """Types of digital interfaces that can be analyzed."""
+    DESKTOP_APPLICATION = "desktop_app"
+    WEB_PAGE = "web_page"
+    TERMINAL = "terminal"
+    MOBILE_APP = "mobile_app"
+    GAME = "game"
+    DEVELOPMENT_IDE = "development_ide"
+    DESIGN_TOOL = "design_tool"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class UIElement:
+    """Represents a detected UI element."""
+    element_type: str  # button, text_input, menu, etc.
+    bounding_box: Tuple[int, int, int, int]  # x, y, width, height
