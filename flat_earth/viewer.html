@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flat-Earth Game World — Interactive Model</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a12;
+    color: #d0d8f0;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+    gap: 14px;
+  }
+  h1 { font-size: 16px; color: #7ab8f5; letter-spacing: 2px; text-transform: uppercase; }
+  .layout { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+  canvas {
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    cursor: crosshair;
+    background: #050510;
+  }
+  .panel {
+    width: 300px;
+    background: #0d0d1e;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .panel h2 { font-size: 12px; color: #5af; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #1a2a4a; padding-bottom: 6px; }
+  .row { display: flex; justify-content: space-between; gap: 8px; }
+  .label { color: #6a7a9a; }
+  .value { color: #e0ecff; font-weight: bold; }
+  .value.hi  { color: #ffd080; }
+  .value.lo  { color: #80c0ff; }
+  .value.ok  { color: #80ff80; }
+  .value.warn{ color: #ff8040; }
+  .hint { color: #3a4a6a; font-size: 11px; line-height: 1.5; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button {
+    background: #1a2a4a; border: 1px solid #3a4a6a; color: #a0c0e0;
+    padding: 5px 12px; border-radius: 4px; cursor: pointer; font-family: inherit;
+    font-size: 12px; letter-spacing: 0.5px;
+  }
+  button:hover { background: #2a3a6a; }
+  button.active { background: #2a4a8a; color: #c0e0ff; border-color: #5a8adf; }
+  input[type=range] { width: 100%; accent-color: #4a7adf; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6a7a9a; }
+  .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .tension { background: #1a0a0a; border: 1px solid #3a1a1a; border-radius: 4px; padding: 8px; font-size: 11px; line-height: 1.7; }
+  .tension .ok   { color: #60c060; }
+  .tension .warn { color: #c06020; }
+  .section-tab { display: flex; gap: 4px; margin-bottom: 6px; }
+  .tab { background: #111; border: 1px solid #2a2a4a; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; color: #6a7a9a; }
+  .tab.active { background: #1a2a4a; color: #aac; border-color: #4a5a7a; }
+</style>
+</head>
+<body>
+<h1>Flat-Earth Game World — Interactive Physics Model</h1>
+
+<div class="controls">
+  <button id="btnPlay" class="active">⏸ Pause</button>
+  <button id="btnDay">1× Day</button>
+  <button id="btnFast">100× Fast</button>
+  <button id="btnYear">1× Year</button>
+  <span class="label" style="margin-left:8px">Speed:</span>
+  <input type="range" id="speedSlider" min="0" max="5000" value="100" style="width:120px">
+  <span id="speedLabel" class="value">100×</span>
+  <span class="label" style="margin-left:12px">View:</span>
+  <button id="btnNorth" class="active">Top-Down</button>
+  <button id="btnCross">Cross-Section</button>
+</div>
+
+<div class="layout">
+  <canvas id="worldCanvas" width="540" height="540"></canvas>
+
+  <div class="panel">
+    <h2>🌍 Observer Readout</h2>
+    <div class="hint">Click anywhere on the disk to place observer</div>
+    <div class="row"><span class="label">Position r</span><span class="value" id="out_r">—</span></div>
+    <div class="row"><span class="label">Azimuth φ</span><span class="value" id="out_phi">—</span></div>
+    <div class="row"><span class="label">Latitude</span><span class="value" id="out_lat">—</span></div>
+    <div class="row"><span class="label">Longitude</span><span class="value" id="out_lon">—</span></div>
+
+    <h2>🌞 Celestial</h2>
+    <div class="row"><span class="label">Sun elevation</span><span class="value" id="out_sunel">—</span></div>
+    <div class="row"><span class="label">Daylight</span><span class="value" id="out_day">—</span></div>
+    <div class="row"><span class="label">Moon phase</span><span class="value" id="out_moon">—</span></div>
+    <div class="row"><span class="label">Eclipse</span><span class="value" id="out_eclipse">—</span></div>
+
+    <h2>⚡ Physics</h2>
+    <div class="row"><span class="label">Surface g</span><span class="value" id="out_g">—</span></div>
+    <div class="row"><span class="label">Ω(r) field</span><span class="value" id="out_omega">—</span></div>
+    <div class="row"><span class="label">Foucault T</span><span class="value" id="out_foucault">—</span></div>
+    <div class="row"><span class="label">Cyclone spin</span><span class="value" id="out_cyclone">—</span></div>
+    <div class="row"><span class="label">Star rotation</span><span class="value" id="out_stars">—</span></div>
+
+    <h2>⏰ World Time</h2>
+    <div class="row"><span class="label">Day</span><span class="value" id="out_day_num">—</span></div>
+    <div class="row"><span class="label">Time of day</span><span class="value" id="out_tod">—</span></div>
+    <div class="row"><span class="label">Season</span><span class="value" id="out_season">—</span></div>
+
+    <h2>Model Status</h2>
+    <div class="tension">
+      <div><span class="ok">✓</span> Vacuum free-fall (universal)</div>
+      <div><span class="ok">✓</span> Opposite stellar rotations</div>
+      <div><span class="ok">✓</span> Circular eclipse shadows</div>
+      <div><span class="ok">✓</span> Coriolis sign flip at r₀</div>
+      <div><span class="warn">✗</span> Cross-disk geodesics (±6–126%)</div>
+      <div><span class="warn">✗</span> Eclipse speed (200 vs 600 m/s)</div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#ffd44a"></div>Sun</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#c0d8ff"></div>Moon</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#204060;border:1px solid #3a6090"></div>Day zone</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#080812"></div>Night</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#ffffff"></div>Observer</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#c03030"></div>Eclipse umbra</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#804020"></div>Equator (r₀)</div>
+</div>
+
+<script>
+// ─── Parameters ────────────────────────────────────────────────────────────
+const R       = 20000;     // world radius km
+const R0      = 10000;     // midplane km
+const BETA    = 0.8;
+const G0      = 9.80665;
+const R_FIELD = 6371;
+const T_DAY   = 86400;
+const T_YEAR  = 365.25 * 86400;
+const T_MONTH = 29.53 * 86400;
+const OMEGA0  = 2*Math.PI / T_DAY;
+const H_SUN   = 5000;
+const R_SUN0  = 8000;
+const EPS_SUN = 0.20;
+const SUN_CONE= 50 * Math.PI/180;
+const H_MOON  = 4000;
+const R_MOON0 = 8200;
+const SUN_R   = 700;  // physical radius km
+const MOON_R  = 350;
+
+// ─── State ─────────────────────────────────────────────────────────────────
+let t         = 0;          // seconds
+let speed     = 100;        // sim seconds per real second
+let running   = true;
+let obsR      = 5000;
+let obsPhi    = 0;
+let view      = 'top';      // 'top' | 'cross'
+let lastTs    = null;
+
+// ─── Physics functions ─────────────────────────────────────────────────────
+function sunPos(t) {
+  const phi = (2*Math.PI*t/T_DAY) % (2*Math.PI);
+  const r   = R_SUN0 * (1 + EPS_SUN * Math.cos(2*Math.PI*t/T_YEAR));
+  return {r, phi, z: H_SUN};
+}
+
+function moonPos(t) {
+  const phiSun   = 2*Math.PI*t/T_DAY;
+  const phase    = 2*Math.PI*t/T_MONTH;
+  const phi      = (phiSun - phase) % (2*Math.PI);
+  const rSunVar  = EPS_SUN * Math.cos(2*Math.PI*t/T_YEAR);
+  const r        = R_MOON0 * (1 + 0.8*rSunVar);
+  return {r, phi: ((phi % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI), z: H_MOON};
+}
+
+function illumRadius() { return H_SUN * Math.tan(SUN_CONE); }
+
+function isDaylight(r, phi, t) {
+  const s = sunPos(t);
+  const sx = s.r * Math.cos(s.phi), sy = s.r * Math.sin(s.phi);
+  const ox = r  * Math.cos(phi),    oy = r  * Math.sin(phi);
+  return Math.hypot(sx-ox, sy-oy) < illumRadius();
+}
+
+function sunElevDeg(r, phi, t) {
+  const s = sunPos(t);
+  const sx = s.r * Math.cos(s.phi), sy = s.r * Math.sin(s.phi);
+  const ox = r  * Math.cos(phi),    oy = r  * Math.sin(phi);
+  const d  = Math.hypot(sx-ox, sy-oy);
+  return (Math.atan2(H_SUN, d)) * 180/Math.PI;
+}
+
+function moonPhase(t) { return (t/T_MONTH) % 1; }
+function moonIllum(t) { return 0.5*(1 - Math.cos(2*Math.PI*moonPhase(t))); }
+function phaseName(f) {
+  if (f < 0.05) return 'New';
+  if (f < 0.20) return 'Waxing Crescent';
+  if (f < 0.30) return 'First Quarter';
+  if (f < 0.45) return 'Waxing Gibbous';
+  if (f < 0.55) return 'Full';
+  if (f < 0.70) return 'Waning Gibbous';
+  if (f < 0.80) return 'Last Quarter';
+  if (f < 0.95) return 'Waning Crescent';
+  return 'New';
+}
+
+function umbraApex() {
+  if (SUN_R <= MOON_R) return Infinity;
+  return H_MOON - MOON_R * (H_SUN - H_MOON) / (SUN_R - MOON_R);
+}
+function umbraRadius() {
+  if (umbraApex() <= 0) return 0;
+  return MOON_R * H_MOON / (H_SUN - H_MOON);
+}
+function penumbraRadius() { return SUN_R * H_MOON / (H_SUN - H_MOON); }
+
+function eclipseStatus(r, phi, t) {
+  const m = moonPos(t);
+  const mx = m.r * Math.cos(m.phi), my = m.r * Math.sin(m.phi);
+  const ox = r   * Math.cos(phi),   oy = r   * Math.sin(phi);
+  const d  = Math.hypot(ox-mx, oy-my);
+  const Ru = umbraRadius(), Rp = penumbraRadius();
+  if (d < Ru) return {phase:'TOTAL', pct:100, d, Ru, Rp, mx, my};
+  if (d < Rp) return {phase:'partial', pct:Math.round(100*(Rp-d)/(Rp-Ru+0.01)), d, Ru, Rp, mx, my};
+  return {phase:'none', pct:0, d, Ru, Rp, mx, my};
+}
+
+function localOmega(r) { return OMEGA0 * (R0 - r) / R0; }
+function foucaultHours(r) {
+  const om = localOmega(r);
+  if (Math.abs(om) < 1e-15) return Infinity;
+  return Math.abs(2*Math.PI/om) / 3600;
+}
+function surfaceG(r) { return G0; }  // flat — just g0 for now
+function gameLat(r) { return 90*(1 - 2*r/R); }
+function gameLon(phi) { let d = phi*180/Math.PI; return d > 180 ? d-360 : d; }
+
+function seasonName(t) {
+  const yr = (t % T_YEAR) / T_YEAR;
+  if (yr < 0.25) return 'Inner Summer';
+  if (yr < 0.50) return 'Spring';
+  if (yr < 0.75) return 'Outer Summer';
+  return 'Autumn';
+}
+
+// ─── Canvas setup ──────────────────────────────────────────────────────────
+const canvas = document.getElementById('worldCanvas');
+const ctx    = canvas.getContext('2d');
+const W      = canvas.width, H_C = canvas.height;
+const cx     = W/2, cy = H_C/2;
+const SCALE  = W/2 / R * 0.93;  // px per km
+
+function worldToCanvas(r, phi) {
+  const x = cx + r * Math.cos(phi) * SCALE;
+  const y = cy - r * Math.sin(phi) * SCALE;
+  return [x, y];
+}
+function canvasToWorld(px, py) {
+  const dx = (px - cx) / SCALE;
+  const dy = (cy - py) / SCALE;
+  const r  = Math.hypot(dx, dy);
+  const phi = ((Math.atan2(dy, dx)) % (2*Math.PI) + 2*Math.PI) % (2*Math.PI);
+  return {r, phi};
+}
+
+// ─── Stars (static points) ─────────────────────────────────────────────────
+const stars = Array.from({length: 200}, () => ({
+  x: Math.random()*W,
+  y: Math.random()*H_C,
+  br: Math.random()
+})).filter(s => Math.hypot(s.x-cx, s.y-cy) > R*SCALE*1.01);
+
+// ─── Drawing ───────────────────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0, 0, W, H_C);
+
+  if (view === 'top') {
+    drawTopDown();
+  } else {
+    drawCrossSection();
+  }
+}
+
+function drawTopDown() {
+  // Stars background
+  stars.forEach(s => {
+    ctx.fillStyle = `rgba(200,220,255,${0.2 + 0.5*s.br})`;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.br*1.2, 0, Math.PI*2); ctx.fill();
+  });
+
+  // World disc
+  ctx.beginPath();
+  ctx.arc(cx, cy, R*SCALE, 0, Math.PI*2);
+  ctx.fillStyle = '#06061a';
+  ctx.fill();
+  ctx.strokeStyle = '#1a2a5a';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Day/night cone — draw illuminated sector as radial gradient
+  const s = sunPos(t);
+  const [sx, sy] = worldToCanvas(s.r, s.phi);
+  const illR = illumRadius() * SCALE;
+
+  // Gradient fill for the lit zone
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R*SCALE, 0, Math.PI*2);
+  ctx.clip();
+
+  const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, illR);
+  grad.addColorStop(0.0,  'rgba(40, 90, 160, 0.55)');
+  grad.addColorStop(0.7,  'rgba(20, 50, 100, 0.30)');
+  grad.addColorStop(1.0,  'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H_C);
+  ctx.restore();
+
+  // Equator ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, R0*SCALE, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(180, 80, 20, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(180,80,20,0.5)';
+  ctx.font = '10px Courier New';
+  ctx.fillText('equator r₀', cx + R0*SCALE + 4, cy);
+
+  // Latitude rings
+  [30, 60, -30, -60].forEach(lat => {
+    const rr = R * (1 - lat/90) / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr*SCALE, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(40, 60, 120, 0.2)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([2, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Eclipse umbra / penumbra
+  const ec = eclipseStatus(obsR, obsPhi, t);
+  if (ec.pct > 0) {
+    const [emx, emy] = worldToCanvas(moonPos(t).r, moonPos(t).phi);
+    if (ec.Rp > 0) {
+      ctx.beginPath();
+      ctx.arc(emx, emy, ec.Rp*SCALE, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(150, 60, 10, 0.12)';
+      ctx.fill();
+    }
+    if (ec.Ru > 0) {
+      ctx.beginPath();
+      ctx.arc(emx, emy, ec.Ru*SCALE, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(200, 30, 10, 0.25)';
+      ctx.fill();
+    }
+  }
+
+  // Meridian lines
+  for (let phi = 0; phi < Math.PI*2; phi += Math.PI/6) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    const [ex, ey] = worldToCanvas(R, phi);
+    ctx.lineTo(ex, ey);
+    ctx.strokeStyle = 'rgba(40,60,120,0.12)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // Moon
+  const m = moonPos(t);
+  const [mcanx, mcany] = worldToCanvas(m.r, m.phi);
+  const mfrac = moonIllum(t);
+  ctx.beginPath();
+  ctx.arc(mcanx, mcany, 7, 0, Math.PI*2);
+  ctx.fillStyle = `rgba(180, 210, 255, ${0.5 + 0.5*mfrac})`;
+  ctx.fill();
+  ctx.strokeStyle = '#8ab0e0';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Moon trail
+  ctx.beginPath();
+  for (let dt = 0; dt < T_MONTH * 0.15; dt += T_MONTH * 0.15 / 40) {
+    const mp2 = moonPos(t - dt);
+    const [mx2, my2] = worldToCanvas(mp2.r, mp2.phi);
+    dt === 0 ? ctx.moveTo(mx2, my2) : ctx.lineTo(mx2, my2);
+  }
+  ctx.strokeStyle = 'rgba(100,150,220,0.15)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Sun
+  const [sunx, suny] = worldToCanvas(s.r, s.phi);
+  const sunGrad = ctx.createRadialGradient(sunx, suny, 0, sunx, suny, 14);
+  sunGrad.addColorStop(0, '#fff8c0');
+  sunGrad.addColorStop(0.4, '#ffd040');
+  sunGrad.addColorStop(1, 'rgba(255,160,0,0)');
+  ctx.beginPath();
+  ctx.arc(sunx, suny, 14, 0, Math.PI*2);
+  ctx.fillStyle = sunGrad;
+  ctx.fill();
+
+  // Sun trail (orbital path)
+  ctx.beginPath();
+  for (let dt = 0; dt < T_DAY; dt += T_DAY/60) {
+    const sp2 = sunPos(t - dt);
+    const [sx2, sy2] = worldToCanvas(sp2.r, sp2.phi);
+    dt === 0 ? ctx.moveTo(sx2, sy2) : ctx.lineTo(sx2, sy2);
+  }
+  ctx.strokeStyle = 'rgba(255,180,30,0.12)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Observer
+  const [obx, oby] = worldToCanvas(obsR, obsPhi);
+  ctx.beginPath();
+  ctx.arc(obx, oby, 5, 0, Math.PI*2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.strokeStyle = '#aaddff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Observer label
+  ctx.fillStyle = '#aaddff';
+  ctx.font = '10px Courier New';
+  ctx.fillText('observer', obx + 8, oby + 4);
+
+  // World edge label
+  ctx.fillStyle = '#2a3a6a';
+  ctx.font = '11px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('ice wall  (r = 20 000 km)', cx, H_C - 6);
+  ctx.fillText('N', cx, 14);
+  ctx.textAlign = 'left';
+}
+
+function drawCrossSection() {
+  // Show side view: x axis = radial, y axis = altitude
+  const xScale = (W - 60) / R;     // px per km
+  const yScale = 120 / 10000;      // px per km altitude (showing up to 10000 km)
+  const baseY  = H_C - 60;
+  const leftX  = 30;
+
+  ctx.fillStyle = '#050510';
+  ctx.fillRect(0, 0, W, H_C);
+
+  // Surface
+  ctx.beginPath();
+  ctx.moveTo(leftX, baseY);
+  ctx.lineTo(leftX + R*xScale, baseY);
+  ctx.strokeStyle = '#3a5a3a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Axes labels
+  ctx.fillStyle = '#3a5a9a';
+  ctx.font = '10px Courier New';
+  ctx.fillText('r=0 (N)', leftX, baseY+14);
+  ctx.fillText('r=R (edge)', leftX + R*xScale - 50, baseY+14);
+  ctx.fillText('alt (km)', leftX, 12);
+
+  // Altitude grid
+  [1000, 2000, 3000, 4000, 5000, 6000].forEach(alt => {
+    const y = baseY - alt * yScale;
+    ctx.beginPath();
+    ctx.moveTo(leftX, y);
+    ctx.lineTo(leftX + R*xScale, y);
+    ctx.strokeStyle = 'rgba(40,60,120,0.3)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([3,5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#3a5a9a';
+    ctx.fillText(alt+'', leftX - 28, y+4);
+  });
+
+  // Equator line
+  const eq_x = leftX + R0*xScale;
+  ctx.beginPath(); ctx.moveTo(eq_x, baseY); ctx.lineTo(eq_x, 20);
+  ctx.strokeStyle = 'rgba(180,80,20,0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4,4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Sun
+  const s  = sunPos(t);
+  const sx_c = leftX + s.r * xScale;
+  const sy_c = baseY - H_SUN * yScale;
+  ctx.beginPath();
+  ctx.arc(sx_c, sy_c, 10, 0, Math.PI*2);
+  ctx.fillStyle = '#ffd040';
+  ctx.fill();
+  ctx.fillStyle = '#ffa020';
+  ctx.font = '10px Courier New';
+  ctx.fillText('Sun', sx_c+12, sy_c+4);
+
+  // Illumination cone lines
+  const illR_y0 = illumRadius();
+  [[1], [-1]].forEach(([sign]) => {
+    ctx.beginPath();
+    ctx.moveTo(sx_c, sy_c);
+    const ex = sx_c + sign * illR_y0 * xScale;
+    ctx.lineTo(ex, baseY);
+    ctx.strokeStyle = 'rgba(255,200,50,0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  });
+
+  // Moon
+  const m  = moonPos(t);
+  const mx_c = leftX + m.r * xScale;
+  const my_c = baseY - H_MOON * yScale;
+  ctx.beginPath();
+  ctx.arc(mx_c, my_c, 7, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(180,210,255,0.8)';
+  ctx.fill();
+  ctx.fillStyle = '#8ab0e0';
+  ctx.fillText('Moon', mx_c+10, my_c+4);
+
+  // Observer
+  const ob_x = leftX + obsR * xScale;
+  ctx.beginPath();
+  ctx.arc(ob_x, baseY, 5, 0, Math.PI*2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // g field arrows
+  for (let r = 1000; r < R; r += 3000) {
+    const arr_x = leftX + r*xScale;
+    ctx.beginPath();
+    ctx.moveTo(arr_x, baseY - 20);
+    ctx.lineTo(arr_x, baseY - 4);
+    ctx.strokeStyle = 'rgba(100,200,100,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(arr_x-3, baseY-8); ctx.lineTo(arr_x, baseY-2); ctx.lineTo(arr_x+3, baseY-8);
+    ctx.fillStyle = 'rgba(100,200,100,0.4)'; ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(100,200,100,0.5)';
+  ctx.font = '10px Courier New';
+  ctx.fillText('g↓ universal', leftX+10, baseY-24);
+
+  // Title
+  ctx.fillStyle = '#3a5a8a';
+  ctx.font = '11px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('Cross-section view (radial distance → , altitude ↑)', W/2, H_C-4);
+  ctx.textAlign = 'left';
+}
+
+// ─── HUD update ────────────────────────────────────────────────────────────
+function updateHUD() {
+  const lat  = gameLat(obsR);
+  const lon  = gameLon(obsPhi);
+  const sunel = sunElevDeg(obsR, obsPhi, t);
+  const day   = isDaylight(obsR, obsPhi, t);
+  const phase = moonPhase(t);
+  const illum = moonIllum(t);
+  const ec    = eclipseStatus(obsR, obsPhi, t);
+  const om    = localOmega(obsR) * 180/Math.PI * 3600;  // °/hr
+  const fT    = foucaultHours(obsR);
+  const fTstr = isFinite(fT) ? fT.toFixed(1)+' hr' : '∞ (equator)';
+
+  set('out_r',       obsR.toFixed(0)+' km');
+  set('out_phi',     (obsPhi*180/Math.PI).toFixed(1)+'°');
+  set('out_lat',     lat.toFixed(1)+'°');
+  set('out_lon',     lon.toFixed(1)+'°');
+
+  setV('out_sunel',  sunel.toFixed(1)+'°', sunel > 10 ? 'hi' : sunel > 0 ? 'lo' : 'warn');
+  setV('out_day',    day ? '☀ Yes' : '🌑 No', day ? 'ok' : 'lo');
+  set('out_moon',    phaseName(phase)+` (${(illum*100).toFixed(0)}%)`);
+  setV('out_eclipse', ec.phase === 'none' ? '—' : ec.phase.toUpperCase()+` (${ec.pct}%)`,
+       ec.phase === 'TOTAL' ? 'hi' : ec.phase === 'partial' ? 'warn' : '');
+
+  set('out_g',       G0.toFixed(5)+' m/s²');
+  setV('out_omega',  om.toFixed(4)+'°/hr', om > 0 ? 'lo' : om < 0 ? 'hi' : '');
+  set('out_foucault', fTstr);
+  const cycDir = obsR < R0 ? 'CCW' : obsR > R0 ? 'CW' : 'none';
+  setV('out_cyclone', cycDir, obsR !== R0 ? (obsR < R0 ? 'lo' : 'hi') : '');
+  setV('out_stars',  obsR < R0 ? 'CCW (N)' : 'CW (S)', obsR < R0 ? 'lo' : 'hi');
+
+  const dayNum = Math.floor(t / T_DAY);
+  const tod    = t % T_DAY;
+  const hh     = Math.floor(tod/3600).toString().padStart(2,'0');
+  const mm     = Math.floor((tod%3600)/60).toString().padStart(2,'0');
+  set('out_day_num', 'Day '+dayNum);
+  set('out_tod',     hh+':'+mm);
+  set('out_season',  seasonName(t));
+}
+
+function set(id, val) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = val; el.className = 'value'; }
+}
+function setV(id, val, cls) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = val; el.className = 'value ' + (cls||''); }
+}
+
+// ─── Animation loop ────────────────────────────────────────────────────────
+function frame(ts) {
+  if (lastTs !== null && running) {
+    const dt = Math.min((ts - lastTs) / 1000, 0.05);  // real seconds
+    t += dt * speed;
+  }
+  lastTs = ts;
+  draw();
+  updateHUD();
+  requestAnimationFrame(frame);
+}
+
+// ─── Controls ─────────────────────────────────────────────────────────────
+document.getElementById('btnPlay').addEventListener('click', () => {
+  running = !running;
+  document.getElementById('btnPlay').textContent = running ? '⏸ Pause' : '▶ Play';
+  document.getElementById('btnPlay').classList.toggle('active', running);
+});
+document.getElementById('btnDay').addEventListener('click', ()  => { speed = 1; document.getElementById('speedSlider').value = 1; setSpeedLabel(1); });
+document.getElementById('btnFast').addEventListener('click', () => { speed = 100; document.getElementById('speedSlider').value = 100; setSpeedLabel(100); });
+document.getElementById('btnYear').addEventListener('click', () => { speed = 365*24; document.getElementById('speedSlider').value = Math.min(5000, 365*24); setSpeedLabel(365*24); });
+
+document.getElementById('speedSlider').addEventListener('input', e => {
+  speed = parseInt(e.target.value);
+  setSpeedLabel(speed);
+});
+function setSpeedLabel(s) { document.getElementById('speedLabel').textContent = s+'×'; }
+
+document.getElementById('btnNorth').addEventListener('click', () => {
+  view = 'top';
+  document.getElementById('btnNorth').classList.add('active');
+  document.getElementById('btnCross').classList.remove('active');
+});
+document.getElementById('btnCross').addEventListener('click', () => {
+  view = 'cross';
+  document.getElementById('btnCross').classList.add('active');
+  document.getElementById('btnNorth').classList.remove('active');
+});
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const py = e.clientY - rect.top;
+  if (view === 'top') {
+    const {r, phi} = canvasToWorld(px, py);
+    if (r <= R) { obsR = r; obsPhi = phi; }
+  } else {
+    // cross section: x = radial
+    const xScale = (W - 60) / R;
+    const r = Math.max(0, Math.min(R, (px - 30) / xScale));
+    obsR  = r;
+    obsPhi = 0;
+  }
+});
+
+// ─── Start ─────────────────────────────────────────────────────────────────
+t = T_DAY * 0.25;  // start at morning
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
