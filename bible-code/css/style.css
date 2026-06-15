@@ -42,12 +42,16 @@ body {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.75rem;
   padding: 0.6rem 1rem;
-  background: linear-gradient(180deg, var(--parchment-dark), var(--parchment));
-  border-bottom: 3px double var(--gold-dark);
+  background: color-mix(in srgb, var(--parchment) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 16px rgba(60, 47, 20, 0.08);
   flex-shrink: 0;
-  z-index: 40;
+  position: relative;
+  z-index: 60;
 }
 
 #top-bar h1 {
@@ -56,12 +60,14 @@ body {
   font-size: 1.3rem;
   color: var(--ink);
   letter-spacing: 0.05em;
+  flex-shrink: 0;
 }
 
 .top-bar-actions {
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .icon-btn {
@@ -69,9 +75,11 @@ body {
   font-size: 0.9rem;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0.35rem 0.7rem;
   color: var(--ink);
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.1s ease;
 }
 
 .icon-btn:hover,
@@ -79,6 +87,57 @@ body {
   background: var(--gold);
   color: #fff;
   border-color: var(--gold);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.icon-btn:active {
+  transform: translateY(1px);
+}
+
+/* ---------------------------------------------------------------------
+   Layer opacity controls (top bar)
+   --------------------------------------------------------------------- */
+.layer-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 0.1rem 0;
+}
+
+.layer-controls[hidden] {
+  display: none;
+}
+
+.layer-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.78rem;
+  color: var(--ink-light);
+}
+
+.layer-label {
+  font-family: var(--heb-font);
+  font-size: 0.95rem;
+  color: var(--ink);
+  white-space: nowrap;
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layer-opacity {
+  width: 4.5rem;
+  accent-color: var(--gold-dark);
 }
 
 /* ---------------------------------------------------------------------
@@ -145,12 +204,14 @@ body {
    --------------------------------------------------------------------- */
 .drawer {
   position: fixed;
-  background: #fffdf7;
-  box-shadow: 0 0 24px rgba(60, 47, 20, 0.3);
+  background: color-mix(in srgb, #fffdf7 94%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 40px rgba(60, 47, 20, 0.2);
   z-index: 50;
   display: flex;
   flex-direction: column;
-  transition: transform 0.25s ease;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .drawer-header {
@@ -206,7 +267,8 @@ body {
   border-right: 1px solid var(--border);
 }
 
-.drawer-left.open {
+.drawer-left.open,
+.drawer-left.peek {
   transform: translateX(0);
 }
 
@@ -220,7 +282,8 @@ body {
   border-left: 1px solid var(--border);
 }
 
-.drawer-right.open {
+.drawer-right.open,
+.drawer-right.peek {
   transform: translateX(0);
 }
 
@@ -241,8 +304,40 @@ body {
   transform: translateY(calc(100% - 3rem));
 }
 
-.drawer-bottom.open {
+.drawer-bottom.open,
+.drawer-bottom.peek {
   transform: translateY(0);
+}
+
+/* Edge zones that reveal a drawer when the pointer moves near them.
+   Sits above the drawers themselves so an edge stays reachable even
+   while another drawer is open and covering that edge. */
+@media (hover: hover) and (pointer: fine) {
+  .hover-zone {
+    position: fixed;
+    z-index: 55;
+  }
+
+  .hover-zone-left {
+    top: var(--topbar-h);
+    bottom: 0;
+    left: 0;
+    width: 14px;
+  }
+
+  .hover-zone-right {
+    top: var(--topbar-h);
+    bottom: 0;
+    right: 0;
+    width: 14px;
+  }
+
+  .hover-zone-bottom {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 10px;
+  }
 }
 
 .drawer-handle {
@@ -258,6 +353,11 @@ body {
   color: var(--ink);
   padding: 0.85rem 1.25rem;
   border-radius: 14px 14px 0 0;
+  transition: background-color 0.15s ease;
+}
+
+.drawer-handle:hover {
+  background: color-mix(in srgb, var(--gold) 18%, var(--parchment-dark));
 }
 
 .handle-arrow {
@@ -320,13 +420,16 @@ body {
   font-size: 1.4rem;
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
   color: var(--ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .heb-input:focus {
-  outline: 2px solid var(--gold);
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent);
 }
 
 .remove-term {
@@ -355,10 +458,20 @@ button {
   background: var(--gold-dark);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0.6rem 1.4rem;
   font-size: 1rem;
   margin-top: 0.75rem;
+  transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+
+.primary:hover:not(:disabled) {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--gold-dark) 45%, transparent);
+  transform: translateY(-1px);
+}
+
+.primary:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .primary:disabled {
@@ -371,9 +484,20 @@ button {
   background: transparent;
   border: 1px solid var(--gold-dark);
   color: var(--gold-dark);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 0.4rem 0.9rem;
   font-size: 0.9rem;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--gold-dark);
+  color: #fff;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--gold-dark) 35%, transparent);
+}
+
+.secondary:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .secondary:disabled {
@@ -403,11 +527,13 @@ button {
   padding: 0.3rem 0.8rem;
   font-size: 0.95rem;
   color: var(--ink);
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .preset:hover {
   background: var(--gold);
   color: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--gold) 35%, transparent);
 }
 
 /* ---------------------------------------------------------------------
@@ -431,13 +557,16 @@ button {
   font-size: 1rem;
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
   color: var(--ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .translate-input:focus {
-  outline: 2px solid var(--gold);
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent);
 }
 
 .heb-output {
@@ -471,6 +600,7 @@ button {
   background: var(--parchment-dark);
   border-radius: 6px;
   color: var(--ink);
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .key:hover {
@@ -522,6 +652,7 @@ button {
   border: 1px solid var(--border);
   border-radius: 4px;
   font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .controls-row select {
@@ -529,6 +660,14 @@ button {
   border: 1px solid var(--border);
   border-radius: 4px;
   font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.controls-row input[type="number"]:focus,
+.controls-row select:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent);
 }
 
 .muted {
@@ -593,8 +732,13 @@ button {
   align-items: center;
   padding: 0.3rem 0.5rem;
   background: #fff;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid var(--border);
+  transition: box-shadow 0.15s ease;
+}
+
+.match-item:hover {
+  box-shadow: 0 2px 10px rgba(60, 47, 20, 0.1);
 }
 
 .match-label {
@@ -605,15 +749,17 @@ button {
   border: 1px solid var(--gold-dark);
   background: var(--parchment-dark);
   color: var(--gold-dark);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 0.2rem 0.6rem;
   font-size: 0.8rem;
   flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .view-btn:hover {
   background: var(--gold-dark);
   color: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--gold-dark) 35%, transparent);
 }
 
 /* ---------------------------------------------------------------------

@@ -14,6 +14,7 @@
   <div id="app">
     <header id="top-bar">
       <h1>📜 Bible Code Explorer</h1>
+      <div id="layer-controls" class="layer-controls" hidden aria-label="Word opacity controls"></div>
       <div class="top-bar-actions">
         <button type="button" id="toggle-theme-btn" class="icon-btn" title="Theme settings" aria-label="Theme settings">🎨 Theme</button>
         <button type="button" id="toggle-search-btn" class="icon-btn" title="Search words" aria-label="Search words">🔍 Search</button>
@@ -168,6 +169,11 @@
         </details>
       </div>
     </section>
+
+    <!-- Hover near a screen edge to pop the matching drawer out -->
+    <div id="hover-zone-left" class="hover-zone hover-zone-left" aria-hidden="true"></div>
+    <div id="hover-zone-right" class="hover-zone hover-zone-right" aria-hidden="true"></div>
+    <div id="hover-zone-bottom" class="hover-zone hover-zone-bottom" aria-hidden="true"></div>
   </div>
 
   <script src="js/els.js"></script>

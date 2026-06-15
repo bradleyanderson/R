@@ -87,6 +87,7 @@ function openDrawer(id) {
 
 function closeDrawer(id) {
   setDrawerOpen(id, false);
+  document.getElementById(id).classList.remove('peek');
 }
 
 function toggleDrawer(id) {
@@ -116,6 +117,37 @@ function setupLayout() {
   };
   update();
   window.addEventListener('resize', update);
+}
+
+// Reveal a drawer when the pointer nears its screen edge, and hide it
+// again once the pointer leaves both the edge zone and the drawer
+// (an explicitly opened/"pinned" drawer stays open regardless).
+function setupHoverReveal() {
+  const zones = [
+    { zoneId: 'hover-zone-left', drawerId: 'theme-drawer' },
+    { zoneId: 'hover-zone-right', drawerId: 'results-drawer' },
+    { zoneId: 'hover-zone-bottom', drawerId: 'search-drawer' },
+  ];
+
+  zones.forEach(({ zoneId, drawerId }) => {
+    const zone = document.getElementById(zoneId);
+    const drawer = document.getElementById(drawerId);
+    let hideTimer = null;
+
+    const reveal = () => {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      drawer.classList.add('peek');
+    };
+    const scheduleHide = () => {
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => drawer.classList.remove('peek'), 350);
+    };
+
+    zone.addEventListener('mouseenter', reveal);
+    zone.addEventListener('mouseleave', scheduleHide);
+    drawer.addEventListener('mouseenter', reveal);
+    drawer.addEventListener('mouseleave', scheduleHide);
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -459,8 +491,8 @@ async function onSearch() {
     const matches = searchELS(term, minSkip, maxSkip, range, 1000);
     matches.sort((a, b) => Math.abs(a.skip) - Math.abs(b.skip) || a.start - b.start);
     const color = colorForIndex(ti);
-    matches.forEach((m) => { m.color = color; m.term = term; m.label = label; });
-    allResults.push({ term, label, color, matches });
+    matches.forEach((m) => { m.color = color; m.term = term; m.label = label; m.termIndex = ti; });
+    allResults.push({ term, label, color, matches, opacity: 1 });
     await new Promise((r) => setTimeout(r, 0));
   }
   const elapsed = (performance.now() - t0).toFixed(0);
@@ -469,6 +501,7 @@ async function onSearch() {
   state.flatMatches = allResults.flatMap((r) => r.matches);
 
   renderResults(allResults, minSkip, maxSkip);
+  renderLayerControls();
 
   const totalFound = allResults.reduce((s, r) => s + r.matches.length, 0);
   setStatus(
@@ -587,14 +620,14 @@ function renderGrid() {
   const topLeftIdx = grid[0][0].idx;
   const bottomRightIdx = grid[rows - 1][cols - 1].idx;
 
-  const highlightMap = new Map(); // idx -> Set of colors
-  const linePaths = []; // { color, label, points: [[x, y], ...] }
+  const highlightMap = new Map(); // idx -> Map(termIndex -> color)
+  const linePaths = []; // { color, label, points: [[x, y], ...], termIndex }
   for (const m of state.flatMatches) {
     const pts = [];
     for (const idx of m.indices) {
       if (idx >= topLeftIdx && idx <= bottomRightIdx) {
-        if (!highlightMap.has(idx)) highlightMap.set(idx, new Set());
-        highlightMap.get(idx).add(m.color);
+        if (!highlightMap.has(idx)) highlightMap.set(idx, new Map());
+        highlightMap.get(idx).set(m.termIndex, m.color);
 
         const rel = idx - topLeftIdx;
         const r = Math.floor(rel / cols);
@@ -602,7 +635,7 @@ function renderGrid() {
         pts.push([cols - c - 0.5, r + 0.5]); // RTL columns: 0 is rightmost
       }
     }
-    if (pts.length >= 2) linePaths.push({ color: m.color, label: m.label, points: pts });
+    if (pts.length >= 2) linePaths.push({ color: m.color, label: m.label, points: pts, termIndex: m.termIndex });
   }
 
   const table = document.createElement('table');
@@ -616,11 +649,10 @@ function renderGrid() {
         td.title = refForIndex(cell.idx);
       }
       if (highlightMap.has(cell.idx)) {
-        const colors = Array.from(highlightMap.get(cell.idx));
+        const entries = Array.from(highlightMap.get(cell.idx).entries());
         td.classList.add('hl');
-        td.style.background = colors.length === 1
-          ? colors[0]
-          : `linear-gradient(135deg, ${colors.join(', ')})`;
+        td.dataset.terms = entries.map(([ti]) => ti).join(',');
+        applyCellBackground(td, entries);
       }
       tr.appendChild(td);
     }
@@ -652,18 +684,23 @@ function buildLinesSVG(rows, cols, linePaths) {
   svg.setAttribute('viewBox', `0 0 ${cols} ${rows}`);
   svg.setAttribute('preserveAspectRatio', 'none');
 
-  for (const { color, label, points } of linePaths) {
+  for (const { color, label, points, termIndex } of linePaths) {
     const pointsAttr = points.map((p) => p.join(',')).join(' ');
+    const opacity = state.allResults[termIndex]?.opacity ?? 1;
 
     const halo = document.createElementNS(SVG_NS, 'polyline');
     halo.setAttribute('points', pointsAttr);
     halo.setAttribute('class', 'els-line-halo');
+    halo.dataset.termIndex = String(termIndex);
+    halo.style.opacity = opacity;
     svg.appendChild(halo);
 
     const line = document.createElementNS(SVG_NS, 'polyline');
     line.setAttribute('points', pointsAttr);
     line.setAttribute('class', 'els-line');
     line.setAttribute('stroke', color);
+    line.dataset.termIndex = String(termIndex);
+    line.style.opacity = opacity;
     svg.appendChild(line);
 
     const start = document.createElementNS(SVG_NS, 'circle');
@@ -672,6 +709,8 @@ function buildLinesSVG(rows, cols, linePaths) {
     start.setAttribute('r', 0.16);
     start.setAttribute('class', 'els-line-start');
     start.setAttribute('fill', color);
+    start.dataset.termIndex = String(termIndex);
+    start.style.opacity = opacity;
     svg.appendChild(start);
 
     if (label) {
@@ -691,12 +730,87 @@ function buildLinesSVG(rows, cols, linePaths) {
       text.setAttribute('transform', `rotate(${angle.toFixed(1)} ${mid[0]} ${mid[1]})`);
       text.setAttribute('class', 'els-line-label');
       text.setAttribute('fill', color);
+      text.dataset.termIndex = String(termIndex);
+      text.style.opacity = opacity;
       text.textContent = label;
       svg.appendChild(text);
     }
   }
 
   return svg;
+}
+
+// ---------------------------------------------------------------------
+// Layer opacity controls (per-word, shown in the top bar)
+// ---------------------------------------------------------------------
+function colorWithOpacity(color, opacity) {
+  const pct = Math.round(clamp(opacity, 0, 1) * 100);
+  return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+}
+
+function applyCellBackground(td, entries) {
+  const layers = entries.map(([ti, color]) => colorWithOpacity(color, state.allResults[ti]?.opacity ?? 1));
+  td.style.background = layers.length === 1 ? layers[0] : `linear-gradient(135deg, ${layers.join(', ')})`;
+}
+
+function applyLineOpacity(termIndex, opacity) {
+  document.querySelectorAll(`[data-term-index="${termIndex}"]`).forEach((el) => {
+    el.style.opacity = opacity;
+  });
+}
+
+function updateCellOpacity(termIndex) {
+  document.querySelectorAll('.els-grid td.hl').forEach((td) => {
+    const terms = (td.dataset.terms || '').split(',').filter(Boolean).map(Number);
+    if (!terms.includes(termIndex)) return;
+    const entries = terms.map((ti) => [ti, state.allResults[ti].color]);
+    applyCellBackground(td, entries);
+  });
+}
+
+// Builds one swatch + label + opacity slider per searched word with results,
+// shown in the top bar so each word's line/highlight can be faded independently.
+function renderLayerControls() {
+  const container = document.getElementById('layer-controls');
+  container.innerHTML = '';
+
+  const visible = state.allResults.filter((r) => r.matches.length > 0);
+  container.hidden = visible.length === 0;
+  if (visible.length === 0) return;
+
+  state.allResults.forEach((r, i) => {
+    if (r.matches.length === 0) return;
+
+    const chip = document.createElement('div');
+    chip.className = 'layer-chip';
+
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.background = r.color;
+
+    const label = document.createElement('span');
+    label.className = 'layer-label';
+    label.textContent = r.label || r.term;
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = '100';
+    slider.value = String(Math.round((r.opacity ?? 1) * 100));
+    slider.className = 'layer-opacity';
+    slider.setAttribute('aria-label', `${r.label || r.term} opacity`);
+    slider.addEventListener('input', () => {
+      const opacity = clamp(parseInt(slider.value, 10), 0, 100) / 100;
+      r.opacity = opacity;
+      applyLineOpacity(i, opacity);
+      updateCellOpacity(i);
+    });
+
+    chip.appendChild(swatch);
+    chip.appendChild(label);
+    chip.appendChild(slider);
+    container.appendChild(chip);
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -796,6 +910,7 @@ function findOverlapView() {
 async function init() {
   setupLayout();
   setupDrawers();
+  setupHoverReveal();
   setupTheme();
   setupKeyboard();
   setupTermRows();
