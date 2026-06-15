@@ -1175,11 +1175,7 @@ function runCrosswordSearch() {
 
 function setupCrossword() {
   document.getElementById('crossword-search-btn').addEventListener('click', runCrosswordSearch);
-  document.getElementById('crossword-btn').addEventListener('click', () => {
-    openDrawer('search-drawer');
-    runCrosswordSearch();
-    document.getElementById('crossword-search-btn').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  });
+  document.getElementById('crossword-btn').addEventListener('click', runCrosswordSearch);
 }
 
 // ---------------------------------------------------------------------
