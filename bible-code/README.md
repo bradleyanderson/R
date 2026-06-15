@@ -4,6 +4,8 @@ A static, client-side web app for exploring **Equidistant Letter Sequences
 (ELS)** — the so-called "Bible Code" — in the Hebrew text of the Torah
 (Genesis through Deuteronomy, Westminster Leningrad Codex, public domain).
 
+**Live app:** https://bradleyanderson.github.io/R/
+
 ## Features
 
 - Search for one or more Hebrew words across a configurable skip range
