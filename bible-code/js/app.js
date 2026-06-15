@@ -23,6 +23,7 @@ const state = {
   allResults: [],   // [{ term, label, color, matches }]
   flatMatches: [],  // every match across all terms
   currentCenter: undefined,
+  favorites: [],    // pinned matches, persisted to localStorage
 };
 
 function clamp(v, lo, hi) {
@@ -69,13 +70,21 @@ function rangeForBook(name) {
 const DRAWER_TOGGLES = {
   'theme-drawer': 'toggle-theme-btn',
   'results-drawer': 'toggle-results-btn',
+  'favorites-drawer': 'toggle-favorites-btn',
   'search-drawer': 'toggle-search-btn',
+};
+
+// Right-side drawers share the same slot, so opening one closes the other.
+const DRAWER_EXCLUSIVE = {
+  'results-drawer': 'favorites-drawer',
+  'favorites-drawer': 'results-drawer',
 };
 
 function setDrawerOpen(id, open) {
   document.getElementById(id).classList.toggle('open', open);
   const btnId = DRAWER_TOGGLES[id];
   if (btnId) document.getElementById(btnId).classList.toggle('active', open);
+  if (open && DRAWER_EXCLUSIVE[id]) setDrawerOpen(DRAWER_EXCLUSIVE[id], false);
 }
 
 function openDrawer(id) {
@@ -93,6 +102,7 @@ function toggleDrawer(id) {
 function setupDrawers() {
   document.getElementById('toggle-theme-btn').addEventListener('click', () => toggleDrawer('theme-drawer'));
   document.getElementById('toggle-results-btn').addEventListener('click', () => toggleDrawer('results-drawer'));
+  document.getElementById('toggle-favorites-btn').addEventListener('click', () => toggleDrawer('favorites-drawer'));
 
   // Closing the search drawer runs a search with whatever words are tagged.
   const toggleSearchDrawer = () => {
@@ -202,6 +212,7 @@ const THEME_VARS = {
   'theme-grid-bg': '--grid-bg',
   'theme-ink': '--ink',
   'theme-accent': '--gold-dark',
+  'theme-slider': '--slider-accent',
 };
 const THEME_STORAGE_KEY = 'bibleCodeTheme';
 
@@ -461,6 +472,31 @@ async function labelForTerm(term) {
   }
 }
 
+// The user's browser language (base code, e.g. "en"), used to translate
+// crossword dictionary words into something the user can read.
+function getUserLang() {
+  return (navigator.language || 'en').split('-')[0].toLowerCase();
+}
+
+const crosswordLabelCache = new Map(); // `${hebrewWord}|${lang}` -> translation or null
+
+// Best-effort translation of a Hebrew dictionary word into the given
+// language. Returns null (and caches the failure) if unavailable.
+async function translateHebrewWord(word, lang) {
+  if (lang === 'he' || lang === 'iw') return null;
+  const key = `${word}|${lang}`;
+  if (crosswordLabelCache.has(key)) return crosswordLabelCache.get(key);
+  try {
+    const { text } = await translateText(word, 'iw', lang);
+    const translated = text.trim() || null;
+    crosswordLabelCache.set(key, translated);
+    return translated;
+  } catch (err) {
+    crosswordLabelCache.set(key, null);
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------
@@ -586,8 +622,32 @@ function renderResults(allResults, minSkip, maxSkip) {
         viewBtn.textContent = 'View grid';
         viewBtn.addEventListener('click', () => showGrid(m));
 
+        const pinBtn = document.createElement('button');
+        pinBtn.type = 'button';
+        pinBtn.className = 'pin-btn';
+        const setPinState = (pinned) => {
+          pinBtn.textContent = pinned ? '★' : '☆';
+          pinBtn.title = pinned ? 'Remove from favorites' : 'Pin to favorites';
+          pinBtn.setAttribute('aria-label', pinBtn.title);
+        };
+        setPinState(isFavorited(m));
+        pinBtn.addEventListener('click', () => {
+          if (isFavorited(m)) {
+            removeFavoriteByMatch(m);
+            setPinState(false);
+          } else {
+            addFavorite(m, r.label, r.color);
+            setPinState(true);
+          }
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'match-actions';
+        actions.appendChild(viewBtn);
+        actions.appendChild(pinBtn);
+
         item.appendChild(label);
-        item.appendChild(viewBtn);
+        item.appendChild(actions);
         list.appendChild(item);
       });
       section.appendChild(list);
@@ -1161,12 +1221,17 @@ function runCrosswordSearch() {
     svg.appendChild(line);
   }
 
+  const userLang = getUserLang();
   shown.forEach(({ word, cells }) => {
     const chip = document.createElement('span');
     chip.className = 'preset';
     chip.title = refForIndex(cells[0].idx);
     chip.textContent = `${word} (${gematriaValue(word)})`;
     resultsEl.appendChild(chip);
+
+    translateHebrewWord(word, userLang).then((translated) => {
+      if (translated) chip.textContent = `${word} (${gematriaValue(word)}) — ${translated}`;
+    });
   });
 
   const more = found.length > shown.length ? ` (showing top ${shown.length} by word length)` : '';
@@ -1174,8 +1239,125 @@ function runCrosswordSearch() {
 }
 
 function setupCrossword() {
-  document.getElementById('crossword-search-btn').addEventListener('click', runCrosswordSearch);
   document.getElementById('crossword-btn').addEventListener('click', runCrosswordSearch);
+}
+
+// ---------------------------------------------------------------------
+// Favorites
+// ---------------------------------------------------------------------
+const FAVORITES_STORAGE_KEY = 'bibleCodeFavorites';
+
+function loadFavorites() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(state.favorites));
+  } catch (err) {
+    // Storage unavailable (e.g. private browsing) — favorites just won't persist.
+  }
+}
+
+function favoriteKey(m) {
+  return `${m.term}|${m.skip}|${m.start}`;
+}
+
+function isFavorited(m) {
+  return state.favorites.some((f) => favoriteKey(f) === favoriteKey(m));
+}
+
+function addFavorite(m, label, color) {
+  if (isFavorited(m)) return;
+  state.favorites.push({
+    term: m.term,
+    label: label || m.label || m.term,
+    color,
+    skip: m.skip,
+    start: m.start,
+    indices: m.indices,
+    savedAt: Date.now(),
+  });
+  saveFavorites();
+  renderFavorites();
+}
+
+function removeFavoriteByMatch(m) {
+  state.favorites = state.favorites.filter((f) => favoriteKey(f) !== favoriteKey(m));
+  saveFavorites();
+  renderFavorites();
+}
+
+function removeFavoriteAt(index) {
+  state.favorites.splice(index, 1);
+  saveFavorites();
+  renderFavorites();
+}
+
+function viewFavorite(fav) {
+  showGrid(fav);
+  closeDrawer('favorites-drawer');
+}
+
+function renderFavorites() {
+  const list = document.getElementById('favorites-list');
+  list.innerHTML = '';
+
+  if (state.favorites.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'No favorites yet — pin a result from the Results list to save it here.';
+    list.appendChild(p);
+    return;
+  }
+
+  state.favorites.forEach((fav, index) => {
+    const item = document.createElement('div');
+    item.className = 'favorite-item';
+
+    const label = document.createElement('span');
+    label.className = 'match-label';
+    const startRef = refForIndex(Math.min(...fav.indices));
+    const endRef = refForIndex(Math.max(...fav.indices));
+    const skipLabel = `${fav.skip > 0 ? '+' : ''}${fav.skip}`;
+    const rangeLabel = startRef === endRef
+      ? `skip ${skipLabel} — ${startRef}`
+      : `skip ${skipLabel} — ${startRef} → ${endRef}`;
+    label.textContent = `${fav.label || fav.term} — ${rangeLabel}`;
+
+    const viewBtn = document.createElement('button');
+    viewBtn.type = 'button';
+    viewBtn.className = 'view-btn';
+    viewBtn.textContent = 'View grid';
+    viewBtn.addEventListener('click', () => viewFavorite(fav));
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'pin-btn';
+    removeBtn.textContent = '★';
+    removeBtn.title = 'Remove from favorites';
+    removeBtn.setAttribute('aria-label', removeBtn.title);
+    removeBtn.addEventListener('click', () => removeFavoriteAt(index));
+
+    const actions = document.createElement('div');
+    actions.className = 'match-actions';
+    actions.appendChild(viewBtn);
+    actions.appendChild(removeBtn);
+
+    item.appendChild(label);
+    item.appendChild(actions);
+    list.appendChild(item);
+  });
+}
+
+function setupFavorites() {
+  state.favorites = loadFavorites();
+  renderFavorites();
 }
 
 // ---------------------------------------------------------------------
@@ -1192,6 +1374,7 @@ async function init() {
   setupTermRows();
   setupGematriaCalculator();
   setupCrossword();
+  setupFavorites();
   clearGrid();
 
   document.getElementById('grid-width').addEventListener('input', renderGrid);

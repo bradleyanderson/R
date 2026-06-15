@@ -13,6 +13,7 @@
   --topbar-h: 3.2rem;
   --cell-zoom: 1;
   --line-thickness: 1;
+  --slider-accent: #f2b441;
 }
 
 * {
@@ -160,7 +161,7 @@ body {
 
 .thickness-controls input[type="range"] {
   width: 4.5rem;
-  accent-color: var(--gold);
+  accent-color: var(--slider-accent);
 }
 
 .thickness-level {
@@ -214,7 +215,7 @@ body {
 
 .layer-opacity {
   width: 4.5rem;
-  accent-color: var(--gold);
+  accent-color: var(--slider-accent);
 }
 
 /* Pinned chips in the toolbar are more compact than the dropdown's. */
@@ -321,7 +322,7 @@ body {
 
 #grid-toolbar input[type="range"] {
   width: 9rem;
-  accent-color: var(--gold);
+  accent-color: var(--slider-accent);
 }
 
 #grid-info {
@@ -412,13 +413,41 @@ body {
   font-weight: 600;
   font-size: 0.78rem;
   color: var(--ink-light);
-  margin: 1.1rem 0 0.5rem;
+  margin: 0.85rem 0 0.35rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
 
 .drawer-body h3:first-child {
   margin-top: 0;
+}
+
+/* Collapsible inline hints */
+.hint {
+  margin: 0.2rem 0 0.5rem;
+}
+
+.hint summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--ink-light);
+  list-style: none;
+}
+
+.hint summary::-webkit-details-marker {
+  display: none;
+}
+
+.hint summary::before {
+  content: "ⓘ ";
+}
+
+.hint[open] summary::before {
+  content: "▾ ";
+}
+
+.hint p {
+  margin: 0.4rem 0 0;
 }
 
 /* Left: theme drawer */
@@ -928,6 +957,57 @@ button {
   color: var(--on-accent);
   border-color: var(--gold);
   box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 35%, transparent);
+}
+
+.match-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.pin-btn {
+  border: none;
+  background: transparent;
+  color: var(--gold);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.2rem 0.3rem;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.pin-btn:hover {
+  transform: scale(1.15);
+}
+
+/* ---------------------------------------------------------------------
+   Favorites
+   --------------------------------------------------------------------- */
+.favorite-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--parchment-dark);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin-bottom: 0.3rem;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.favorite-item:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--gold) 25%, transparent);
+}
+
+.favorite-item .match-label {
+  flex: 1;
+  font-family: var(--heb-font);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------

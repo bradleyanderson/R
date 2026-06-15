@@ -34,6 +34,7 @@
         <button type="button" id="toggle-theme-btn" class="icon-btn" title="Theme settings" aria-label="Theme settings">🎨 Theme</button>
         <button type="button" id="toggle-search-btn" class="icon-btn" title="Search words" aria-label="Search words">🔍 Search</button>
         <button type="button" id="toggle-results-btn" class="icon-btn" title="Results" aria-label="Results">📋 Results</button>
+        <button type="button" id="toggle-favorites-btn" class="icon-btn" title="Favorites" aria-label="Favorites">⭐ Favorites</button>
       </div>
     </header>
 
@@ -86,6 +87,10 @@
           Accent
           <input type="color" id="theme-accent" />
         </label>
+        <label class="color-row">
+          Sliders
+          <input type="color" id="theme-slider" />
+        </label>
         <button type="button" id="theme-reset" class="secondary">Reset to default</button>
       </div>
     </aside>
@@ -101,6 +106,18 @@
       </div>
     </aside>
 
+    <!-- Favorites drawer (right) -->
+    <aside id="favorites-drawer" class="drawer drawer-right">
+      <div class="drawer-header">
+        <h2>Favorites</h2>
+        <button type="button" class="drawer-close" data-close="favorites-drawer" aria-label="Close favorites panel">✕</button>
+      </div>
+      <div class="drawer-body">
+        <p class="muted">Pinned grid results, saved on this device for later.</p>
+        <div id="favorites-list"></div>
+      </div>
+    </aside>
+
     <!-- Search drawer (bottom) -->
     <section id="search-drawer" class="drawer drawer-bottom">
       <button type="button" class="drawer-handle" id="search-drawer-handle">
@@ -108,19 +125,21 @@
         <span class="handle-arrow" aria-hidden="true">▲</span>
       </button>
       <div class="drawer-body">
-        <h3>1. Choose your word(s)</h3>
-        <p class="muted">
-          Type a word in any language — it's translated to Hebrew automatically
-          and shown faded inside the box, with its gematria (numeric) value
-          alongside. Press Enter to search with everything entered so far and
-          open a fresh box for the next word. You can also type Hebrew letters
-          directly. Add up to 30 words — each gets its own color and label,
-          shown along its line in the grid.
-        </p>
+        <h3>Words</h3>
+        <details class="hint">
+          <summary>How searching words works</summary>
+          <p class="muted">
+            Type a word in any language — it's translated to Hebrew and shown
+            faded inside the box, with its gematria value alongside. Press
+            Enter to search everything entered so far and open a new box for
+            the next word. You can also type Hebrew directly. Up to 30 words,
+            each with its own color and label shown on its line in the grid.
+          </p>
+        </details>
         <div id="term-rows"></div>
         <button type="button" id="add-term-btn" class="secondary">+ Add another word</button>
 
-        <h3>2. Set your search range</h3>
+        <h3>Search range</h3>
         <div class="controls-row">
           <label>
             Min skip
@@ -142,34 +161,40 @@
             </select>
           </label>
         </div>
-        <p class="muted">
-          "Skip" is how many letters apart each letter of the word is in the raw text
-          (skip 1 = the word as normally written). Larger skip ranges find more
-          matches but take longer to search. Closing this panel — with the handle
-          below or the "🔍 Search" button in the top bar — runs the search with
-          the words currently entered.
-        </p>
+        <details class="hint">
+          <summary>What does "skip" mean?</summary>
+          <p class="muted">
+            "Skip" is how many letters apart each letter is in the raw text
+            (skip 1 = the word as normally written). Larger ranges find more
+            matches but take longer. Closing this panel runs the search with
+            the words currently entered.
+          </p>
+        </details>
 
         <h3>Gematria calculator</h3>
-        <p class="muted">
-          Type a Hebrew word to see its gematria (numeric) value — the same
-          values shown next to each search word above and under every letter
-          in the grid.
-        </p>
+        <details class="hint">
+          <summary>What is this?</summary>
+          <p class="muted">
+            Type a Hebrew word to see its gematria (numeric) value — the same
+            values shown next to each search word above and under every letter
+            in the grid.
+          </p>
+        </details>
         <div class="gematria-calc">
           <input type="text" id="gematria-input" class="gematria-input" dir="rtl" maxlength="40" placeholder="הקלד מילה בעברית" aria-label="Hebrew word for gematria calculation" />
           <div id="gematria-result" class="gematria-result" aria-live="polite"></div>
         </div>
 
-        <h3>Find crossing Hebrew words</h3>
-        <p class="muted">
-          After viewing a grid for a searched word, click "🔎 Open search" on
-          the grid toolbar (next to "Find crossing words") to scan the visible
-          grid for other Hebrew words — from a built-in dictionary, not tied to
-          any search tag — that cross your highlighted word's path. Matches are
-          outlined on the grid and listed below with their gematria values.
-        </p>
-        <button type="button" id="crossword-search-btn" class="secondary">Search for crossing words</button>
+        <h3>Crossing words</h3>
+        <details class="hint">
+          <summary>How this works</summary>
+          <p class="muted">
+            After opening a grid view, click "🔎 Open search" on the grid
+            toolbar to scan it for dictionary Hebrew words crossing your
+            searched word's path. Matches are outlined on the grid and listed
+            below, translated into your language, with gematria values.
+          </p>
+        </details>
         <p id="crossword-status" class="muted"></p>
         <div id="crossword-results" class="presets"></div>
 
