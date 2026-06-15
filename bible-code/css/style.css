@@ -12,6 +12,7 @@
   --on-accent: #10131a;
   --topbar-h: 3.2rem;
   --cell-zoom: 1;
+  --line-thickness: 1;
 }
 
 * {
@@ -130,6 +131,39 @@ body {
 }
 
 .zoom-level {
+  font-size: 0.75rem;
+  color: var(--ink-light);
+  min-width: 2.7rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------
+   Line thickness control (top bar)
+   --------------------------------------------------------------------- */
+.thickness-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.15rem 0.6rem;
+  flex-shrink: 0;
+}
+
+.thickness-controls .control-label {
+  font-size: 0.72rem;
+  color: var(--ink-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.thickness-controls input[type="range"] {
+  width: 4.5rem;
+  accent-color: var(--gold);
+}
+
+.thickness-level {
   font-size: 0.75rem;
   color: var(--ink-light);
   min-width: 2.7rem;
@@ -738,53 +772,6 @@ button {
 }
 
 /* ---------------------------------------------------------------------
-   Keyboard
-   --------------------------------------------------------------------- */
-.keyboard {
-  display: grid;
-  grid-template-columns: repeat(11, 1fr);
-  gap: 0.3rem;
-}
-
-.key {
-  font-family: var(--heb-font);
-  font-size: 1.2rem;
-  padding: 0.5rem 0;
-  border: 1px solid var(--border);
-  background: var(--parchment-dark);
-  border-radius: 6px;
-  color: var(--ink);
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.key:hover {
-  background: var(--gold);
-  color: var(--on-accent);
-  border-color: var(--gold);
-}
-
-.key.final {
-  background: color-mix(in srgb, var(--parchment-dark) 75%, var(--ink) 10%);
-}
-
-.key.wide {
-  grid-column: span 2;
-  font-family: var(--ui-font);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-@media (max-width: 600px) {
-  .keyboard {
-    grid-template-columns: repeat(6, 1fr);
-  }
-  .key.wide {
-    grid-column: span 3;
-  }
-}
-
-/* ---------------------------------------------------------------------
    Controls
    --------------------------------------------------------------------- */
 .controls-row {
@@ -979,14 +966,14 @@ button {
 .els-line-halo {
   fill: none;
   stroke: rgba(255, 255, 255, 0.18);
-  stroke-width: 0.3;
+  stroke-width: calc(0.3 * var(--line-thickness));
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .els-line {
   fill: none;
-  stroke-width: 0.12;
+  stroke-width: calc(0.12 * var(--line-thickness));
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0.95;

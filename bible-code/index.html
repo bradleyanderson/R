@@ -25,6 +25,11 @@
           <span id="zoom-level" class="zoom-level">100%</span>
           <button type="button" id="zoom-in-btn" class="icon-btn icon-btn-sq" title="Zoom in" aria-label="Zoom in">+</button>
         </div>
+        <div class="thickness-controls" role="group" aria-label="Grid line thickness">
+          <span class="control-label">Lines</span>
+          <input type="range" id="line-thickness" min="1" max="100" value="100" aria-label="Line thickness" />
+          <span id="thickness-level" class="thickness-level">100%</span>
+        </div>
         <button type="button" id="fullscreen-btn" class="icon-btn icon-btn-sq" title="Toggle full screen" aria-label="Toggle full screen">⛶</button>
         <button type="button" id="toggle-theme-btn" class="icon-btn" title="Theme settings" aria-label="Theme settings">🎨 Theme</button>
         <button type="button" id="toggle-search-btn" class="icon-btn" title="Search words" aria-label="Search words">🔍 Search</button>
@@ -122,9 +127,6 @@
           <button type="button" id="use-translation-btn" class="secondary" disabled>Use this word</button>
         </div>
         <p id="translate-status" class="muted"></p>
-
-        <h3>Hebrew keyboard</h3>
-        <div id="keyboard" class="keyboard"></div>
 
         <h3>2. Set your search range</h3>
         <div class="controls-row">

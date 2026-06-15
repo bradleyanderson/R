@@ -19,12 +19,6 @@ function colorForIndex(i) {
   return hslToHex(hue, 60, 42);
 }
 
-const HEB_LETTERS = [
-  'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 'כ', 'ל',
-  'מ', 'נ', 'ס', 'ע', 'פ', 'צ', 'ק', 'ר', 'ש', 'ת',
-];
-const HEB_FINALS = ['ך', 'ם', 'ן', 'ף', 'ץ'];
-
 const TRANSLATE_SUGGESTIONS = ['Torah', 'Moses', 'David', 'Israel', 'Jerusalem', 'Sabbath', 'Light', 'Love'];
 
 const state = {
@@ -48,16 +42,6 @@ function clamp(v, lo, hi) {
 function sanitizeHebrew(input) {
   const cleaned = input.value.replace(/[^א-ת]/g, '');
   if (cleaned !== input.value) input.value = cleaned;
-}
-
-function insertAtCursor(input, char) {
-  const start = input.selectionStart ?? input.value.length;
-  const end = input.selectionEnd ?? input.value.length;
-  input.value = input.value.slice(0, start) + char + input.value.slice(end);
-  const pos = start + char.length;
-  input.setSelectionRange(pos, pos);
-  input.focus();
-  sanitizeHebrew(input);
 }
 
 function setStatus(msg) {
@@ -153,6 +137,23 @@ function setupZoom() {
 }
 
 // ---------------------------------------------------------------------
+// Line thickness
+// ---------------------------------------------------------------------
+function setupLineThickness() {
+  const slider = document.getElementById('line-thickness');
+  const levelEl = document.getElementById('thickness-level');
+
+  const apply = () => {
+    const value = clamp(parseInt(slider.value, 10) || 1, 1, 100);
+    document.documentElement.style.setProperty('--line-thickness', value / 100);
+    levelEl.textContent = `${value}%`;
+  };
+
+  slider.addEventListener('input', apply);
+  apply();
+}
+
+// ---------------------------------------------------------------------
 // Full screen
 // ---------------------------------------------------------------------
 function setupFullscreen() {
@@ -229,60 +230,6 @@ function setupTheme() {
       document.getElementById(inputId).value = defaults[inputId];
     }
   });
-}
-
-// ---------------------------------------------------------------------
-// Keyboard
-// ---------------------------------------------------------------------
-function setupKeyboard() {
-  const board = document.getElementById('keyboard');
-  const makeKey = (ch, extraClass) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'key' + (extraClass ? ' ' + extraClass : '');
-    btn.textContent = ch;
-    btn.addEventListener('click', () => {
-      const target = activeInput || document.querySelector('.heb-input');
-      if (target) insertAtCursor(target, ch);
-    });
-    return btn;
-  };
-
-  HEB_LETTERS.forEach((ch) => board.appendChild(makeKey(ch)));
-  HEB_FINALS.forEach((ch) => board.appendChild(makeKey(ch, 'final')));
-
-  const back = document.createElement('button');
-  back.type = 'button';
-  back.className = 'key wide';
-  back.textContent = '⌫';
-  back.addEventListener('click', () => {
-    const target = activeInput || document.querySelector('.heb-input');
-    if (!target) return;
-    const start = target.selectionStart ?? target.value.length;
-    const end = target.selectionEnd ?? target.value.length;
-    if (start === end && start > 0) {
-      target.value = target.value.slice(0, start - 1) + target.value.slice(end);
-      target.setSelectionRange(start - 1, start - 1);
-    } else {
-      target.value = target.value.slice(0, start) + target.value.slice(end);
-      target.setSelectionRange(start, start);
-    }
-    target.focus();
-  });
-  board.appendChild(back);
-
-  const clear = document.createElement('button');
-  clear.type = 'button';
-  clear.className = 'key wide';
-  clear.textContent = 'Clear';
-  clear.addEventListener('click', () => {
-    const target = activeInput || document.querySelector('.heb-input');
-    if (!target) return;
-    target.value = '';
-    delete target.dataset.label;
-    target.focus();
-  });
-  board.appendChild(clear);
 }
 
 // ---------------------------------------------------------------------
@@ -1042,9 +989,9 @@ async function init() {
   setupDrawers();
   setupZoom();
   setupFullscreen();
+  setupLineThickness();
   setupLayerMenu();
   setupTheme();
-  setupKeyboard();
   setupTermRows();
   setupTranslation();
   clearGrid();
