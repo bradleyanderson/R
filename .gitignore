@@ -130,6 +130,8 @@ dmypy.json
 
 # ResolveAI specific
 data/
+!bible-code/data/
+!bible-code/data/**
 logs/
 temp/
 uploads/
