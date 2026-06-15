@@ -1,0 +1,21 @@
+{%- comment -%}
+  Vintage Bait — circular "stamp" badge (e.g. "Est. 1962", "Hand Tied & True").
+
+  Usage:
+    {% render 'vintage-badge-stamp', eyebrow: 'Est.', title: 'Vintage Bait', year: '1962' %}
+
+  Params:
+    eyebrow (string, optional) — small label above the title
+    title   (string, required) — main badge text
+    year    (string, optional) — year / tagline shown below the title
+{%- endcomment -%}
+
+<div class="vb-stamp">
+  {%- if eyebrow != blank -%}
+    <span class="vb-stamp__eyebrow">{{ eyebrow }}</span>
+  {%- endif -%}
+  <span class="vb-stamp__title">{{ title }}</span>
+  {%- if year != blank -%}
+    <span class="vb-stamp__year">{{ year }}</span>
+  {%- endif -%}
+</div>

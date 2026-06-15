@@ -1,0 +1,118 @@
+{%- comment -%}
+  Vintage Bait — hero banner with optional "stamp" badge overlay.
+  Drop into templates/index.json (see templates/index.json in this project).
+{%- endcomment -%}
+
+<section class="vb-hero color-{{ section.settings.color_scheme }}">
+  <div class="vb-hero__inner">
+    {%- if section.settings.heading != blank -%}
+      <h1 class="vb-hero__heading">{{ section.settings.heading }}</h1>
+    {%- endif -%}
+
+    {%- if section.settings.subheading != blank -%}
+      <div class="vb-hero__subheading">{{ section.settings.subheading }}</div>
+    {%- endif -%}
+
+    {%- if section.settings.show_badge -%}
+      <div class="vb-hero__badge-wrap">
+        {%- render 'vintage-badge-stamp',
+          eyebrow: section.settings.badge_eyebrow,
+          title: section.settings.badge_title,
+          year: section.settings.badge_year
+        -%}
+      </div>
+    {%- endif -%}
+
+    {%- if section.settings.button_label != blank -%}
+      <div class="vb-hero__actions">
+        <a href="{{ section.settings.button_link | default: '#' }}" class="vb-btn">
+          {{ section.settings.button_label }}
+        </a>
+        {%- if section.settings.button_label_2 != blank -%}
+          <a href="{{ section.settings.button_link_2 | default: '#' }}" class="vb-btn vb-btn--outline">
+            {{ section.settings.button_label_2 }}
+          </a>
+        {%- endif -%}
+      </div>
+    {%- endif -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Vintage hero",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "color_scheme",
+      "id": "color_scheme",
+      "label": "Color scheme",
+      "default": "scheme-1"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Vintage Bait Co."
+    },
+    {
+      "type": "richtext",
+      "id": "subheading",
+      "label": "Subheading",
+      "default": "<p>Worn-in apparel and fishing-camp gear for folks who like their gear a little weathered and their stories a little tall.</p>"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_badge",
+      "label": "Show stamp badge",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "badge_eyebrow",
+      "label": "Badge eyebrow",
+      "default": "Est."
+    },
+    {
+      "type": "text",
+      "id": "badge_title",
+      "label": "Badge title",
+      "default": "Vintage Bait"
+    },
+    {
+      "type": "text",
+      "id": "badge_year",
+      "label": "Badge year / tagline",
+      "default": "1962"
+    },
+    {
+      "type": "text",
+      "id": "button_label",
+      "label": "Primary button label",
+      "default": "Shop Apparel"
+    },
+    {
+      "type": "url",
+      "id": "button_link",
+      "label": "Primary button link"
+    },
+    {
+      "type": "text",
+      "id": "button_label_2",
+      "label": "Secondary button label",
+      "default": "Shop Fishing Merch"
+    },
+    {
+      "type": "url",
+      "id": "button_link_2",
+      "label": "Secondary button link"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Vintage hero"
+    }
+  ]
+}
+{% endschema %}

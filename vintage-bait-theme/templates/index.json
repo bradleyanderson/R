@@ -1,0 +1,69 @@
+{
+  "sections": {
+    "vintage_hero": {
+      "type": "vintage-hero",
+      "settings": {
+        "color_scheme": "scheme-1",
+        "heading": "Vintage Bait Co.",
+        "subheading": "<p>Worn-in apparel and fishing-camp gear for folks who like their gear a little weathered and their stories a little tall.</p>",
+        "show_badge": true,
+        "badge_eyebrow": "Est.",
+        "badge_title": "Vintage Bait",
+        "badge_year": "1962",
+        "button_label": "Shop Apparel",
+        "button_link": "shopify://collections/vintage-apparel",
+        "button_label_2": "Shop Fishing Merch",
+        "button_link_2": "shopify://collections/fishing-merch"
+      }
+    },
+    "vintage_collection_grid": {
+      "type": "vintage-collection-grid",
+      "blocks": {
+        "apparel": {
+          "type": "collection_card",
+          "settings": {
+            "collection": "vintage-apparel",
+            "eyebrow": "Casual Wear",
+            "heading": "Vintage Apparel",
+            "description": "Faded tees, worn-in hoodies, and trucker caps built to look broken-in from day one."
+          }
+        },
+        "fishing": {
+          "type": "collection_card",
+          "settings": {
+            "collection": "fishing-merch",
+            "eyebrow": "Camp & Tackle",
+            "heading": "Fishing Merch",
+            "description": "Stickers, koozies, and gear for the dock, the boat, and the campfire stories after."
+          }
+        }
+      },
+      "block_order": ["apparel", "fishing"]
+    },
+    "featured_collection": {
+      "type": "featured-collection",
+      "settings": {
+        "title": "Fresh Off the Line",
+        "collection": "vintage-apparel",
+        "products_to_show": 4,
+        "columns_desktop": 4,
+        "color_scheme": "scheme-1"
+      }
+    },
+    "vintage_seal": {
+      "type": "vintage-badge",
+      "settings": {
+        "badge_eyebrow": "Hand Tied",
+        "badge_title": "Vintage Bait",
+        "badge_year": "& True",
+        "tagline": "Worn-in apparel and fishing-camp gear, made for folks who break things in properly."
+      }
+    }
+  },
+  "order": [
+    "vintage_hero",
+    "vintage_collection_grid",
+    "featured_collection",
+    "vintage_seal"
+  ]
+}

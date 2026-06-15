@@ -1,0 +1,40 @@
+name: Deploy theme to production
+
+on:
+  push:
+    branches: [production]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Configure a "production" GitHub Environment (Settings > Environments)
+    # with required reviewers so this job pauses for manual approval before
+    # it can push to the live theme.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli @shopify/theme
+
+      - name: Push theme to production (live)
+        env:
+          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
+          SHOPIFY_FLAG_STORE: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
+        run: |
+          shopify theme push \
+            --theme="${{ secrets.PRODUCTION_THEME_ID }}" \
+            --allow-live \
+            --force
+
+# Required repo secrets (Settings > Secrets and variables > Actions):
+#   SHOPIFY_CLI_THEME_TOKEN  - theme access token (see .env.example)
+#   SHOPIFY_STORE_DOMAIN     - e.g. your-store.myshopify.com
+#   PRODUCTION_THEME_ID      - theme id of the live/published theme
+#
+# Also create a "production" Environment with required reviewers so this
+# workflow pauses for approval before deploying live.

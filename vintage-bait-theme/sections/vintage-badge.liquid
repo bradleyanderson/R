@@ -1,0 +1,56 @@
+{%- comment -%}
+  Vintage Bait — footer "seal" section. A centered stamp badge with a short
+  tagline, on a tobacco-brown band. Place just above the footer in
+  templates/index.json (and other templates as desired).
+{%- endcomment -%}
+
+<section class="vb-footer-seal">
+  {%- render 'vintage-badge-stamp',
+    eyebrow: section.settings.badge_eyebrow,
+    title: section.settings.badge_title,
+    year: section.settings.badge_year
+  -%}
+
+  {%- if section.settings.tagline != blank -%}
+    <p class="vb-footer-seal__tagline">{{ section.settings.tagline }}</p>
+  {%- endif -%}
+</section>
+
+{% schema %}
+{
+  "name": "Vintage seal",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "badge_eyebrow",
+      "label": "Badge eyebrow",
+      "default": "Hand Tied"
+    },
+    {
+      "type": "text",
+      "id": "badge_title",
+      "label": "Badge title",
+      "default": "Vintage Bait"
+    },
+    {
+      "type": "text",
+      "id": "badge_year",
+      "label": "Badge year / tagline",
+      "default": "& True"
+    },
+    {
+      "type": "text",
+      "id": "tagline",
+      "label": "Tagline",
+      "default": "Worn-in apparel and fishing-camp gear, made for folks who break things in properly."
+    }
+  ],
+  "presets": [
+    {
+      "name": "Vintage seal"
+    }
+  ]
+}
+{% endschema %}

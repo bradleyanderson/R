@@ -1,0 +1,19 @@
+{%- comment -%}
+  Vintage Bait — full-bleed film-grain overlay.
+  Renders once, right after <body>, in layout/theme.liquid:
+    {% render 'grain-overlay' %}
+  Pure SVG/CSS — no raster assets required. Adjust intensity via the
+  --vb-grain-opacity custom property in assets/vintage-bait.css.
+{%- endcomment -%}
+
+<svg class="vb-grain-overlay" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <filter id="vb-grain-filter">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="noise" />
+    <feColorMatrix in="noise" type="matrix"
+      values="0 0 0 0 0
+              0 0 0 0 0
+              0 0 0 0 0
+              0 0 0 0.9 0" />
+  </filter>
+  <rect width="100%" height="100%" filter="url(#vb-grain-filter)" />
+</svg>

@@ -1,0 +1,39 @@
+{
+  "_comment": "Merge these entries into the top-level `color_schemes` object in config/settings_data.json. They back the `color_scheme` settings referenced by vintage-hero, vintage-collection-grid, and featured-collection in templates/index.json. Field names follow Dawn's color-scheme schema (Dawn 11+) — adjust keys if your Dawn version differs.",
+
+  "scheme-1": {
+    "settings": {
+      "background": "#F1E6D2",
+      "background_gradient": "",
+      "text": "#2E2A24",
+      "button": "#B5552B",
+      "button_label": "#F1E6D2",
+      "secondary_button_label": "#6B6B47",
+      "shadow": "#2E2A24"
+    }
+  },
+
+  "scheme-2": {
+    "settings": {
+      "background": "#E3D5B8",
+      "background_gradient": "",
+      "text": "#2E2A24",
+      "button": "#6B6B47",
+      "button_label": "#F1E6D2",
+      "secondary_button_label": "#B5552B",
+      "shadow": "#2E2A24"
+    }
+  },
+
+  "scheme-3-tobacco": {
+    "settings": {
+      "background": "#6E4A2E",
+      "background_gradient": "",
+      "text": "#F1E6D2",
+      "button": "#C9A227",
+      "button_label": "#2E2A24",
+      "secondary_button_label": "#F1E6D2",
+      "shadow": "#2E2A24"
+    }
+  }
+}

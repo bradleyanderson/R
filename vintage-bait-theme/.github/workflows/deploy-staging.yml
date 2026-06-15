@@ -1,0 +1,32 @@
+name: Deploy theme to staging
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli @shopify/theme
+
+      - name: Push theme to staging
+        env:
+          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
+          SHOPIFY_FLAG_STORE: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
+        run: |
+          shopify theme push \
+            --theme="${{ secrets.STAGING_THEME_ID }}" \
+            --force
+
+# Required repo secrets (Settings > Secrets and variables > Actions):
+#   SHOPIFY_CLI_THEME_TOKEN  - theme access token (see .env.example)
+#   SHOPIFY_STORE_DOMAIN     - e.g. your-store.myshopify.com
+#   STAGING_THEME_ID         - theme id of the staging theme
