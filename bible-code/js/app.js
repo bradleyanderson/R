@@ -29,6 +29,11 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+function sanitizeHebrew(input) {
+  const cleaned = input.value.replace(/[^א-ת]/g, '');
+  if (cleaned !== input.value) input.value = cleaned;
+}
+
 // ---------------------------------------------------------------------
 // Gematria (Hebrew letter numeric values, Mispar Hechrachi)
 // ---------------------------------------------------------------------
@@ -64,21 +69,13 @@ function rangeForBook(name) {
 const DRAWER_TOGGLES = {
   'theme-drawer': 'toggle-theme-btn',
   'results-drawer': 'toggle-results-btn',
-  'favorites-drawer': 'toggle-favorites-btn',
   'search-drawer': 'toggle-search-btn',
-};
-
-// Right-side drawers share the same slot, so opening one closes the other.
-const DRAWER_EXCLUSIVE = {
-  'results-drawer': 'favorites-drawer',
-  'favorites-drawer': 'results-drawer',
 };
 
 function setDrawerOpen(id, open) {
   document.getElementById(id).classList.toggle('open', open);
   const btnId = DRAWER_TOGGLES[id];
   if (btnId) document.getElementById(btnId).classList.toggle('active', open);
-  if (open && DRAWER_EXCLUSIVE[id]) setDrawerOpen(DRAWER_EXCLUSIVE[id], false);
 }
 
 function openDrawer(id) {
@@ -96,7 +93,6 @@ function toggleDrawer(id) {
 function setupDrawers() {
   document.getElementById('toggle-theme-btn').addEventListener('click', () => toggleDrawer('theme-drawer'));
   document.getElementById('toggle-results-btn').addEventListener('click', () => toggleDrawer('results-drawer'));
-  document.getElementById('toggle-favorites-btn').addEventListener('click', () => toggleDrawer('favorites-drawer'));
 
   // Closing the search drawer runs a search with whatever words are tagged.
   const toggleSearchDrawer = () => {
@@ -206,7 +202,6 @@ const THEME_VARS = {
   'theme-grid-bg': '--grid-bg',
   'theme-ink': '--ink',
   'theme-accent': '--gold-dark',
-  'theme-slider': '--slider-accent',
 };
 const THEME_STORAGE_KEY = 'bibleCodeTheme';
 
@@ -278,8 +273,9 @@ function updateTermGematria(row, gematria) {
 // search term. Falls back gracefully if translation is unavailable.
 async function translateRowInput(row, input, ghost, gematria, raw) {
   try {
-    const hebrewOnly = await translateToHebrew(raw);
+    const { text: translated } = await translateText(raw, 'auto', 'iw');
     if (input.value.trim() !== raw) return; // user kept typing — ignore stale result
+    const hebrewOnly = translated.replace(/[^א-ת]/g, '').slice(0, 40);
     if (hebrewOnly.length >= 2) {
       row.dataset.hebrew = hebrewOnly;
       row.dataset.label = raw;
@@ -416,52 +412,18 @@ function setupTermRows() {
 // ---------------------------------------------------------------------
 // Gematria calculator
 // ---------------------------------------------------------------------
-// Renders the gematria total and per-letter breakdown for a Hebrew word,
-// along with the Hebrew word itself (useful when it was translated).
-function renderGematriaResult(result, word) {
-  const parts = word.split('').map((ch) => `${ch}(${letterValue(ch)})`);
-  result.innerHTML =
-    `<span class="gematria-hebrew">${word}</span>` +
-    `<span class="total">${gematriaValue(word)}</span>` +
-    `<span class="gematria-breakdown">${parts.join(' + ')}</span>`;
-}
-
-// Lets the user type a word in any language: Hebrew is calculated directly,
-// anything else is translated to Hebrew (debounced) before calculating.
 function setupGematriaCalculator() {
   const input = document.getElementById('gematria-input');
   const result = document.getElementById('gematria-result');
-  let debounceTimer = null;
 
   const update = () => {
-    clearTimeout(debounceTimer);
-    const raw = input.value.trim();
-
-    if (!raw) {
-      result.innerHTML = '';
-      return;
-    }
-
-    if (/^[א-ת]+$/.test(raw)) {
-      renderGematriaResult(result, raw);
-      return;
-    }
-
-    result.innerHTML = '<span class="gematria-error">…</span>';
-    debounceTimer = setTimeout(async () => {
-      try {
-        const hebrewOnly = await translateToHebrew(raw);
-        if (input.value.trim() !== raw) return;
-        if (hebrewOnly.length >= 2) {
-          renderGematriaResult(result, hebrewOnly);
-        } else {
-          result.innerHTML = '<span class="gematria-error">⚠ no Hebrew translation found</span>';
-        }
-      } catch (err) {
-        if (input.value.trim() !== raw) return;
-        result.innerHTML = '<span class="gematria-error">⚠ translation unavailable</span>';
-      }
-    }, 500);
+    sanitizeHebrew(input);
+    const word = input.value;
+    if (!word) { result.innerHTML = ''; return; }
+    const parts = word.split('').map((ch) => `${ch}(${letterValue(ch)})`);
+    result.innerHTML =
+      `<span class="total">${gematriaValue(word)}</span>` +
+      `<span class="gematria-breakdown">${parts.join(' + ')}</span>`;
   };
 
   input.addEventListener('input', update);
@@ -484,13 +446,6 @@ async function translateText(text, sl, tl) {
   };
 }
 
-// Translates text in any language to Hebrew consonants only. Throws if
-// translation is unavailable — callers should catch and degrade gracefully.
-async function translateToHebrew(raw) {
-  const { text: translated } = await translateText(raw, 'auto', 'iw');
-  return translated.replace(/[^א-ת]/g, '').slice(0, 40);
-}
-
 // Best-effort label for a Hebrew search term, used to tag its line in the
 // grid. Falls back to the Hebrew term itself if translation is unavailable.
 async function labelForTerm(term) {
@@ -503,31 +458,6 @@ async function labelForTerm(term) {
   } catch (err) {
     labelCache.set(term, term);
     return term;
-  }
-}
-
-// The user's browser language (base code, e.g. "en"), used to translate
-// crossword dictionary words into something the user can read.
-function getUserLang() {
-  return (navigator.language || 'en').split('-')[0].toLowerCase();
-}
-
-const crosswordLabelCache = new Map(); // `${hebrewWord}|${lang}` -> translation or null
-
-// Best-effort translation of a Hebrew dictionary word into the given
-// language. Returns null (and caches the failure) if unavailable.
-async function translateHebrewWord(word, lang) {
-  if (lang === 'he' || lang === 'iw') return null;
-  const key = `${word}|${lang}`;
-  if (crosswordLabelCache.has(key)) return crosswordLabelCache.get(key);
-  try {
-    const { text } = await translateText(word, 'iw', lang);
-    const translated = text.trim() || null;
-    crosswordLabelCache.set(key, translated);
-    return translated;
-  } catch (err) {
-    crosswordLabelCache.set(key, null);
-    return null;
   }
 }
 
@@ -656,32 +586,8 @@ function renderResults(allResults, minSkip, maxSkip) {
         viewBtn.textContent = 'View grid';
         viewBtn.addEventListener('click', () => showGrid(m));
 
-        const pinBtn = document.createElement('button');
-        pinBtn.type = 'button';
-        pinBtn.className = 'pin-btn';
-        const setPinState = (pinned) => {
-          pinBtn.textContent = pinned ? '★' : '☆';
-          pinBtn.title = pinned ? 'Remove from favorites' : 'Pin to favorites';
-          pinBtn.setAttribute('aria-label', pinBtn.title);
-        };
-        setPinState(isFavorited(m));
-        pinBtn.addEventListener('click', () => {
-          if (isFavorited(m)) {
-            removeFavoriteByMatch(m);
-            setPinState(false);
-          } else {
-            addFavorite(m, r.label, r.color);
-            setPinState(true);
-          }
-        });
-
-        const actions = document.createElement('div');
-        actions.className = 'match-actions';
-        actions.appendChild(viewBtn);
-        actions.appendChild(pinBtn);
-
         item.appendChild(label);
-        item.appendChild(actions);
+        item.appendChild(viewBtn);
         list.appendChild(item);
       });
       section.appendChild(list);
@@ -1255,17 +1161,12 @@ function runCrosswordSearch() {
     svg.appendChild(line);
   }
 
-  const userLang = getUserLang();
   shown.forEach(({ word, cells }) => {
     const chip = document.createElement('span');
     chip.className = 'preset';
     chip.title = refForIndex(cells[0].idx);
     chip.textContent = `${word} (${gematriaValue(word)})`;
     resultsEl.appendChild(chip);
-
-    translateHebrewWord(word, userLang).then((translated) => {
-      if (translated) chip.textContent = `${word} (${gematriaValue(word)}) — ${translated}`;
-    });
   });
 
   const more = found.length > shown.length ? ` (showing top ${shown.length} by word length)` : '';
@@ -1273,141 +1174,8 @@ function runCrosswordSearch() {
 }
 
 function setupCrossword() {
+  document.getElementById('crossword-search-btn').addEventListener('click', runCrosswordSearch);
   document.getElementById('crossword-btn').addEventListener('click', runCrosswordSearch);
-}
-
-// ---------------------------------------------------------------------
-// Favorites
-// ---------------------------------------------------------------------
-const FAVORITES_STORAGE_KEY = 'bibleCodeFavorites';
-
-function loadFavorites() {
-  try {
-    const data = JSON.parse(localStorage.getItem(FAVORITES_STORAGE_KEY) || '[]');
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    return [];
-  }
-}
-
-function saveFavorites(favorites) {
-  localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
-}
-
-// A match is uniquely identified by its term, skip, and starting index.
-function favoriteKey(m) {
-  return `${m.term}|${m.skip}|${m.start}`;
-}
-
-function isFavorited(m) {
-  const key = favoriteKey(m);
-  return loadFavorites().some((f) => favoriteKey(f) === key);
-}
-
-function addFavorite(m, label, color) {
-  const favorites = loadFavorites();
-  const key = favoriteKey(m);
-  if (favorites.some((f) => favoriteKey(f) === key)) return;
-  favorites.unshift({
-    term: m.term,
-    label,
-    color,
-    skip: m.skip,
-    start: m.start,
-    indices: m.indices,
-    savedAt: Date.now(),
-  });
-  saveFavorites(favorites);
-  renderFavorites();
-}
-
-function removeFavoriteByMatch(m) {
-  const key = favoriteKey(m);
-  saveFavorites(loadFavorites().filter((f) => favoriteKey(f) !== key));
-  renderFavorites();
-}
-
-function removeFavoriteAt(idx) {
-  const favorites = loadFavorites();
-  favorites.splice(idx, 1);
-  saveFavorites(favorites);
-  renderFavorites();
-}
-
-// Loads a saved favorite back into the grid as its own highlighted line.
-function viewFavorite(fav) {
-  const match = {
-    term: fav.term,
-    label: fav.label,
-    skip: fav.skip,
-    start: fav.start,
-    indices: fav.indices.slice(),
-    termIndex: 0,
-  };
-  state.allResults = [{ term: fav.term, label: fav.label, color: fav.color, matches: [match], opacity: 1 }];
-  state.flatMatches = [match];
-  state.recentLayers = [];
-  renderLayerControls();
-  showGrid(match);
-  closeDrawer('favorites-drawer');
-}
-
-function renderFavorites() {
-  const container = document.getElementById('favorites-list');
-  const favorites = loadFavorites();
-  container.innerHTML = '';
-
-  if (favorites.length === 0) {
-    const p = document.createElement('p');
-    p.className = 'muted';
-    p.textContent = 'No favorites yet — pin a result with ☆ to save it here.';
-    container.appendChild(p);
-    return;
-  }
-
-  favorites.forEach((fav, idx) => {
-    const item = document.createElement('div');
-    item.className = 'favorite-item';
-
-    const swatch = document.createElement('span');
-    swatch.className = 'swatch';
-    swatch.style.background = fav.color;
-
-    const label = document.createElement('span');
-    label.className = 'match-label';
-    const startRef = refForIndex(Math.min(...fav.indices));
-    const skipLabel = `${fav.skip > 0 ? '+' : ''}${fav.skip}`;
-    const tag = fav.label && fav.label !== fav.term ? ` "${fav.label}"` : '';
-    label.textContent = `${fav.term}${tag} — skip ${skipLabel} — ${startRef}`;
-
-    const viewBtn = document.createElement('button');
-    viewBtn.type = 'button';
-    viewBtn.className = 'view-btn';
-    viewBtn.textContent = 'View grid';
-    viewBtn.addEventListener('click', () => viewFavorite(fav));
-
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'pin-btn';
-    removeBtn.textContent = '★';
-    removeBtn.title = 'Remove from favorites';
-    removeBtn.setAttribute('aria-label', removeBtn.title);
-    removeBtn.addEventListener('click', () => removeFavoriteAt(idx));
-
-    const actions = document.createElement('div');
-    actions.className = 'match-actions';
-    actions.appendChild(viewBtn);
-    actions.appendChild(removeBtn);
-
-    item.appendChild(swatch);
-    item.appendChild(label);
-    item.appendChild(actions);
-    container.appendChild(item);
-  });
-}
-
-function setupFavorites() {
-  renderFavorites();
 }
 
 // ---------------------------------------------------------------------
@@ -1424,7 +1192,6 @@ async function init() {
   setupTermRows();
   setupGematriaCalculator();
   setupCrossword();
-  setupFavorites();
   clearGrid();
 
   document.getElementById('grid-width').addEventListener('input', renderGrid);
