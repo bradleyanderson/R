@@ -25,16 +25,7 @@ const HEB_LETTERS = [
 ];
 const HEB_FINALS = ['ך', 'ם', 'ן', 'ף', 'ץ'];
 
-const PRESETS = [
-  { label: 'תורה (Torah)', value: 'תורה' },
-  { label: 'משה (Moses)', value: 'משה' },
-  { label: 'דוד (David)', value: 'דוד' },
-  { label: 'ישראל (Israel)', value: 'ישראל' },
-  { label: 'ירושלים (Jerusalem)', value: 'ירושלים' },
-  { label: 'שבת (Sabbath)', value: 'שבת' },
-  { label: 'אור (Light)', value: 'אור' },
-  { label: 'אהבה (Love)', value: 'אהבה' },
-];
+const TRANSLATE_SUGGESTIONS = ['Torah', 'Moses', 'David', 'Israel', 'Jerusalem', 'Sabbath', 'Light', 'Love'];
 
 const state = {
   allResults: [],   // [{ term, label, color, matches }]
@@ -360,26 +351,6 @@ function setupTermRows() {
   document.getElementById('add-term-btn').addEventListener('click', () => addTermRow());
 }
 
-function setupPresets() {
-  const container = document.getElementById('presets');
-  PRESETS.forEach((p) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'preset';
-    btn.textContent = p.label;
-    btn.addEventListener('click', () => {
-      const target = activeInput || document.querySelector('.heb-input');
-      if (target) {
-        target.value = p.value;
-        const m = p.label.match(/\(([^)]+)\)/);
-        target.dataset.label = m ? m[1] : p.label;
-        target.focus();
-      }
-    });
-    container.appendChild(btn);
-  });
-}
-
 // ---------------------------------------------------------------------
 // Translation
 // ---------------------------------------------------------------------
@@ -467,6 +438,19 @@ function setupTranslation() {
     }
   });
 
+  const suggestions = document.getElementById('translate-suggestions');
+  TRANSLATE_SUGGESTIONS.forEach((word) => {
+    const sBtn = document.createElement('button');
+    sBtn.type = 'button';
+    sBtn.className = 'preset';
+    sBtn.textContent = word;
+    sBtn.addEventListener('click', () => {
+      input.value = word;
+      doTranslate();
+    });
+    suggestions.appendChild(sBtn);
+  });
+
   useBtn.addEventListener('click', () => {
     if (!lastHebrew) return;
     const target = activeInput || document.querySelector('.heb-input');
@@ -507,7 +491,7 @@ async function onSearch() {
   }
 
   const minSkip = clamp(parseInt(document.getElementById('min-skip').value, 10) || 2, 1, 2000);
-  let maxSkip = clamp(parseInt(document.getElementById('max-skip').value, 10) || 50, minSkip, 2000);
+  let maxSkip = clamp(parseInt(document.getElementById('max-skip').value, 10) || 2000, minSkip, 2000);
   document.getElementById('min-skip').value = minSkip;
   document.getElementById('max-skip').value = maxSkip;
 
@@ -542,6 +526,7 @@ async function onSearch() {
 
   state.allResults = allResults;
   state.flatMatches = allResults.flatMap((r) => r.matches);
+  state.recentLayers = [];
 
   renderResults(allResults, minSkip, maxSkip);
   renderLayerControls();
@@ -822,56 +807,139 @@ function refreshCellsForTerm(termIndex) {
   });
 }
 
-// Builds one swatch + label + opacity slider per searched word with results,
-// shown in the top bar so each word's line/highlight can be faded independently.
+const MAX_PINNED_LAYERS = 4;
+
+// Builds one swatch + label + opacity slider for a single searched word's
+// layer controls. In the dropdown ("pinnable"), a pin button also lets the
+// user promote that word's controls into the toolbar's pinned set.
+function createLayerChip(i, r, pinnable) {
+  const chip = document.createElement('div');
+  chip.className = 'layer-chip';
+  chip.dataset.chipIndex = String(i);
+
+  const colorInput = document.createElement('input');
+  colorInput.type = 'color';
+  colorInput.className = 'swatch layer-color';
+  colorInput.value = r.color;
+  colorInput.title = `${r.label || r.term} line color`;
+  colorInput.setAttribute('aria-label', `${r.label || r.term} line color`);
+  colorInput.addEventListener('input', () => {
+    r.color = colorInput.value;
+    applyLineColor(i, r.color);
+    refreshCellsForTerm(i);
+    syncLayerChip(i, r);
+  });
+
+  const label = document.createElement('span');
+  label.className = 'layer-label';
+  label.textContent = r.label || r.term;
+  label.title = r.label || r.term;
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '0';
+  slider.max = '100';
+  slider.value = String(Math.round((r.opacity ?? 1) * 100));
+  slider.className = 'layer-opacity';
+  slider.setAttribute('aria-label', `${r.label || r.term} opacity`);
+  slider.addEventListener('input', () => {
+    const opacity = clamp(parseInt(slider.value, 10), 0, 100) / 100;
+    r.opacity = opacity;
+    applyLineOpacity(i, opacity);
+    refreshCellsForTerm(i);
+    syncLayerChip(i, r);
+  });
+
+  chip.appendChild(colorInput);
+  chip.appendChild(label);
+  chip.appendChild(slider);
+
+  if (pinnable) {
+    const pinBtn = document.createElement('button');
+    pinBtn.type = 'button';
+    pinBtn.className = 'layer-pin';
+    pinBtn.title = 'Show in toolbar';
+    pinBtn.setAttribute('aria-label', `Show ${r.label || r.term} in toolbar`);
+    pinBtn.textContent = '📌';
+    pinBtn.addEventListener('click', () => {
+      state.recentLayers = [i, ...state.recentLayers.filter((x) => x !== i)].slice(0, MAX_PINNED_LAYERS);
+      renderLayerControls();
+    });
+    chip.appendChild(pinBtn);
+  }
+
+  return chip;
+}
+
+// Keeps a term's toolbar chip and dropdown chip in sync when either is edited.
+function syncLayerChip(i, r) {
+  document.querySelectorAll(`[data-chip-index="${i}"]`).forEach((chip) => {
+    const colorInput = chip.querySelector('.layer-color');
+    const slider = chip.querySelector('.layer-opacity');
+    if (colorInput.value !== r.color) colorInput.value = r.color;
+    const sliderVal = String(Math.round((r.opacity ?? 1) * 100));
+    if (slider.value !== sliderVal) slider.value = sliderVal;
+  });
+}
+
+// Renders the pinned toolbar chips (up to 4, most recently selected first)
+// plus a dropdown menu with controls for every searched word with results.
 function renderLayerControls() {
   const container = document.getElementById('layer-controls');
+  const menu = document.getElementById('layer-menu');
+  const menuBtn = document.getElementById('layer-menu-btn');
   container.innerHTML = '';
+  menu.innerHTML = '';
 
-  const visible = state.allResults.filter((r) => r.matches.length > 0);
+  const visible = state.allResults
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.matches.length > 0);
+
   container.hidden = visible.length === 0;
-  if (visible.length === 0) return;
+  menuBtn.hidden = visible.length === 0;
+  if (visible.length === 0) {
+    closeLayerMenu();
+    return;
+  }
 
-  state.allResults.forEach((r, i) => {
-    if (r.matches.length === 0) return;
+  const visibleIndices = visible.map(({ i }) => i);
+  state.recentLayers = (state.recentLayers || []).filter((i) => visibleIndices.includes(i));
+  for (const i of visibleIndices.slice(-MAX_PINNED_LAYERS).reverse()) {
+    if (state.recentLayers.length >= MAX_PINNED_LAYERS) break;
+    if (!state.recentLayers.includes(i)) state.recentLayers.push(i);
+  }
 
-    const chip = document.createElement('div');
-    chip.className = 'layer-chip';
+  state.recentLayers.forEach((i) => {
+    container.appendChild(createLayerChip(i, state.allResults[i], false));
+  });
 
-    const colorInput = document.createElement('input');
-    colorInput.type = 'color';
-    colorInput.className = 'swatch layer-color';
-    colorInput.value = r.color;
-    colorInput.title = `${r.label || r.term} line color`;
-    colorInput.setAttribute('aria-label', `${r.label || r.term} line color`);
-    colorInput.addEventListener('input', () => {
-      r.color = colorInput.value;
-      applyLineColor(i, r.color);
-      refreshCellsForTerm(i);
-    });
+  visible.forEach(({ r, i }) => {
+    menu.appendChild(createLayerChip(i, r, true));
+  });
+}
 
-    const label = document.createElement('span');
-    label.className = 'layer-label';
-    label.textContent = r.label || r.term;
+// ---------------------------------------------------------------------
+// "All words" layer dropdown menu
+// ---------------------------------------------------------------------
+function closeLayerMenu() {
+  document.getElementById('layer-menu').classList.remove('open');
+  document.getElementById('layer-menu-btn').classList.remove('active');
+}
 
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.min = '0';
-    slider.max = '100';
-    slider.value = String(Math.round((r.opacity ?? 1) * 100));
-    slider.className = 'layer-opacity';
-    slider.setAttribute('aria-label', `${r.label || r.term} opacity`);
-    slider.addEventListener('input', () => {
-      const opacity = clamp(parseInt(slider.value, 10), 0, 100) / 100;
-      r.opacity = opacity;
-      applyLineOpacity(i, opacity);
-      refreshCellsForTerm(i);
-    });
+function setupLayerMenu() {
+  const btn = document.getElementById('layer-menu-btn');
+  const menu = document.getElementById('layer-menu');
 
-    chip.appendChild(colorInput);
-    chip.appendChild(label);
-    chip.appendChild(slider);
-    container.appendChild(chip);
+  btn.addEventListener('click', () => {
+    const open = menu.classList.toggle('open');
+    btn.classList.toggle('active', open);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('open')) return;
+    if (menu.contains(e.target) || btn.contains(e.target)) return;
+    if (!document.body.contains(e.target)) return;
+    closeLayerMenu();
   });
 }
 
@@ -974,10 +1042,10 @@ async function init() {
   setupDrawers();
   setupZoom();
   setupFullscreen();
+  setupLayerMenu();
   setupTheme();
   setupKeyboard();
   setupTermRows();
-  setupPresets();
   setupTranslation();
   clearGrid();
 

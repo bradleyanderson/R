@@ -15,6 +15,10 @@
     <header id="top-bar">
       <h1>📜 Bible Code Explorer</h1>
       <div id="layer-controls" class="layer-controls" hidden aria-label="Word opacity controls"></div>
+      <div class="layer-menu-wrap">
+        <button type="button" id="layer-menu-btn" class="icon-btn" title="All word layers" aria-label="All word layers" hidden>🧩 All words</button>
+        <div id="layer-menu" class="layer-menu" aria-label="All word opacity and color controls"></div>
+      </div>
       <div class="top-bar-actions">
         <div class="zoom-controls" role="group" aria-label="Grid zoom">
           <button type="button" id="zoom-out-btn" class="icon-btn icon-btn-sq" title="Zoom out" aria-label="Zoom out">−</button>
@@ -102,14 +106,13 @@
         <div id="term-rows"></div>
         <button type="button" id="add-term-btn" class="secondary">+ Add another word</button>
 
-        <h3>Quick examples</h3>
-        <div id="presets" class="presets"></div>
-
         <h3>Translate to Hebrew</h3>
         <p class="muted">
           Don't know the Hebrew spelling? Type a word or short phrase in any
           language, translate it, then send the result to a search box above.
+          Or click a word below to translate it instantly.
         </p>
+        <div id="translate-suggestions" class="presets"></div>
         <div class="translate-row">
           <input type="text" id="translate-input" class="translate-input" placeholder="e.g. light, lumière, 平和…" />
           <button type="button" id="translate-btn" class="secondary">Translate</button>
@@ -131,7 +134,7 @@
           </label>
           <label>
             Max skip
-            <input type="number" id="max-skip" value="50" min="1" max="2000" />
+            <input type="number" id="max-skip" value="2000" min="1" max="2000" />
           </label>
           <label>
             Search in
