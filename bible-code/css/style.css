@@ -588,11 +588,17 @@ body {
   border-radius: 50%;
 }
 
-.heb-input {
+.term-input-wrap {
+  position: relative;
   flex: 1;
-  font-family: var(--heb-font);
-  font-size: 1.4rem;
-  padding: 0.4rem 0.6rem;
+  min-width: 0;
+}
+
+.term-input {
+  width: 100%;
+  font-family: var(--ui-font);
+  font-size: 1rem;
+  padding: 0.4rem 4.5rem 0.4rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--parchment);
@@ -600,10 +606,39 @@ body {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.heb-input:focus {
+.term-input:focus {
   outline: none;
   border-color: var(--gold);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 25%, transparent);
+}
+
+/* Faded live preview of the Hebrew translation, overlaid inside the box. */
+.term-ghost {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  font-family: var(--heb-font);
+  font-size: 1.05rem;
+  color: var(--ink-light);
+  opacity: 0.55;
+  pointer-events: none;
+  direction: rtl;
+  max-width: 4.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.term-gematria {
+  font-family: var(--ui-font);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--gold);
+  min-width: 2.2rem;
+  text-align: center;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .remove-term {
@@ -631,34 +666,6 @@ body {
 button {
   font-family: inherit;
   cursor: pointer;
-}
-
-.primary {
-  background: var(--gold);
-  color: var(--on-accent);
-  border: none;
-  border-radius: 6px;
-  padding: 0.6rem 1.4rem;
-  font-family: var(--ui-font);
-  font-weight: 600;
-  font-size: 0.9rem;
-  letter-spacing: 0.03em;
-  margin-top: 0.75rem;
-  transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
-}
-
-.primary:hover:not(:disabled) {
-  box-shadow: 0 0 20px color-mix(in srgb, var(--gold) 55%, transparent);
-  transform: translateY(-1px);
-}
-
-.primary:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.primary:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .secondary {
@@ -725,24 +732,19 @@ button {
 }
 
 /* ---------------------------------------------------------------------
-   Translation
+   Gematria calculator
    --------------------------------------------------------------------- */
-.translate-row {
+.gematria-calc {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.6rem;
   align-items: stretch;
+  flex-wrap: wrap;
 }
 
-.translate-row .secondary {
-  margin-top: 0;
-  flex-shrink: 0;
-}
-
-.translate-input {
-  flex: 1;
-  font-family: var(--ui-font);
-  font-size: 0.95rem;
+.gematria-input {
+  flex: 0 1 12rem;
+  font-family: var(--heb-font);
+  font-size: 1.3rem;
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -751,24 +753,35 @@ button {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.translate-input:focus {
+.gematria-input:focus {
   outline: none;
   border-color: var(--gold);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 25%, transparent);
 }
 
-.heb-output {
-  flex: 1;
-  font-family: var(--heb-font);
-  font-size: 1.4rem;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--parchment-dark);
-  color: var(--ink);
-  min-height: 1.8em;
+.gematria-result {
+  flex: 1 1 12rem;
   display: flex;
   align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+  color: var(--ink-light);
+  min-height: 2.4rem;
+}
+
+.gematria-result .total {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.gematria-breakdown {
+  font-family: var(--heb-font);
+  font-size: 0.95rem;
+  color: var(--ink-light);
+  direction: rtl;
 }
 
 /* ---------------------------------------------------------------------
@@ -934,7 +947,8 @@ button {
   font-family: var(--heb-font);
   font-size: calc(1.3rem * var(--cell-zoom));
   width: 1.8em;
-  height: 1.8em;
+  height: 2.3em;
+  padding: 0;
   text-align: center;
   vertical-align: middle;
   border: 1px solid var(--border);
@@ -946,6 +960,34 @@ button {
   color: #fff;
   font-weight: 700;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.els-grid td.cross {
+  outline: 2px dashed rgba(255, 255, 255, 0.4);
+  outline-offset: -2px;
+}
+
+.cell-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  line-height: 1.1;
+}
+
+.cell-num {
+  font-family: var(--ui-font);
+  font-size: calc(0.5rem * var(--cell-zoom));
+  color: var(--ink-light);
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+  transition: font-size 0.1s ease;
+}
+
+.els-grid td.hl .cell-num {
+  color: #fff;
+  opacity: 0.85;
 }
 
 .grid-wrap {
@@ -982,6 +1024,14 @@ button {
 .els-line-start {
   stroke: rgba(255, 255, 255, 0.5);
   stroke-width: 0.05;
+}
+
+.els-line-cross {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: calc(0.07 * var(--line-thickness));
+  stroke-dasharray: 0.15 0.12;
+  stroke-linecap: round;
 }
 
 .els-line-label {

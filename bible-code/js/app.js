@@ -19,21 +19,11 @@ function colorForIndex(i) {
   return hslToHex(hue, 60, 42);
 }
 
-const TRANSLATE_SUGGESTIONS = ['Torah', 'Moses', 'David', 'Israel', 'Jerusalem', 'Sabbath', 'Light', 'Love'];
-
 const state = {
   allResults: [],   // [{ term, label, color, matches }]
   flatMatches: [],  // every match across all terms
   currentCenter: undefined,
 };
-
-let activeInput = null;
-
-document.addEventListener('focusin', (e) => {
-  if (e.target.classList && e.target.classList.contains('heb-input')) {
-    activeInput = e.target;
-  }
-});
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -42,6 +32,26 @@ function clamp(v, lo, hi) {
 function sanitizeHebrew(input) {
   const cleaned = input.value.replace(/[^א-ת]/g, '');
   if (cleaned !== input.value) input.value = cleaned;
+}
+
+// ---------------------------------------------------------------------
+// Gematria (Hebrew letter numeric values, Mispar Hechrachi)
+// ---------------------------------------------------------------------
+const GEMATRIA_VALUES = {
+  'א': 1, 'ב': 2, 'ג': 3, 'ד': 4, 'ה': 5, 'ו': 6, 'ז': 7, 'ח': 8, 'ט': 9, 'י': 10,
+  'כ': 20, 'ל': 30, 'מ': 40, 'נ': 50, 'ס': 60, 'ע': 70, 'פ': 80, 'צ': 90,
+  'ק': 100, 'ר': 200, 'ש': 300, 'ת': 400,
+  'ך': 20, 'ם': 40, 'ן': 50, 'ף': 80, 'ץ': 90,
+};
+
+function letterValue(ch) {
+  return GEMATRIA_VALUES[ch] || 0;
+}
+
+function gematriaValue(word) {
+  let total = 0;
+  for (const ch of word) total += letterValue(ch);
+  return total;
 }
 
 function setStatus(msg) {
@@ -83,8 +93,15 @@ function toggleDrawer(id) {
 function setupDrawers() {
   document.getElementById('toggle-theme-btn').addEventListener('click', () => toggleDrawer('theme-drawer'));
   document.getElementById('toggle-results-btn').addEventListener('click', () => toggleDrawer('results-drawer'));
-  document.getElementById('toggle-search-btn').addEventListener('click', () => toggleDrawer('search-drawer'));
-  document.getElementById('search-drawer-handle').addEventListener('click', () => toggleDrawer('search-drawer'));
+
+  // Closing the search drawer runs a search with whatever words are tagged.
+  const toggleSearchDrawer = () => {
+    const wasOpen = document.getElementById('search-drawer').classList.contains('open');
+    toggleDrawer('search-drawer');
+    if (wasOpen) onSearch({ silent: true });
+  };
+  document.getElementById('toggle-search-btn').addEventListener('click', toggleSearchDrawer);
+  document.getElementById('search-drawer-handle').addEventListener('click', toggleSearchDrawer);
 
   document.querySelectorAll('.drawer-close').forEach((btn) => {
     btn.addEventListener('click', () => closeDrawer(btn.dataset.close));
@@ -245,13 +262,87 @@ function refreshTermRowState() {
   addBtn.disabled = rows.length >= MAX_TERMS;
 }
 
-function addTermRow(prefillValue, label) {
+// Refreshes a row's gematria badge from its resolved Hebrew term.
+function updateTermGematria(row, gematria) {
+  const hebrew = row.dataset.hebrew || '';
+  gematria.textContent = hebrew.length >= 2 ? String(gematriaValue(hebrew)) : '';
+}
+
+// Translates whatever the user typed (any language) to Hebrew, shows the
+// result as faded "ghost" text inside the box, and stores it as the row's
+// search term. Falls back gracefully if translation is unavailable.
+async function translateRowInput(row, input, ghost, gematria, raw) {
+  try {
+    const { text: translated } = await translateText(raw, 'auto', 'iw');
+    if (input.value.trim() !== raw) return; // user kept typing — ignore stale result
+    const hebrewOnly = translated.replace(/[^א-ת]/g, '').slice(0, 40);
+    if (hebrewOnly.length >= 2) {
+      row.dataset.hebrew = hebrewOnly;
+      row.dataset.label = raw;
+      labelCache.set(hebrewOnly, raw);
+      ghost.textContent = hebrewOnly;
+    } else {
+      row.dataset.hebrew = '';
+      ghost.textContent = '⚠ no Hebrew translation found';
+    }
+  } catch (err) {
+    if (input.value.trim() !== raw) return;
+    row.dataset.hebrew = '';
+    ghost.textContent = '⚠ translation unavailable';
+  }
+  updateTermGematria(row, gematria);
+}
+
+// Wires up a term row's input: typing in any language auto-translates to
+// Hebrew (shown as ghost text), typing Hebrew directly uses it as-is, and
+// Enter runs a search with everything entered so far and opens a new row.
+function setupTermInput(row, input, ghost, gematria) {
+  let debounceTimer = null;
+
+  input.addEventListener('input', () => {
+    delete row.dataset.label;
+    clearTimeout(debounceTimer);
+    const raw = input.value.trim();
+
+    if (!raw) {
+      row.dataset.hebrew = '';
+      ghost.textContent = '';
+      gematria.textContent = '';
+      return;
+    }
+
+    if (/^[א-ת]+$/.test(raw)) {
+      row.dataset.hebrew = raw;
+      ghost.textContent = '';
+      updateTermGematria(row, gematria);
+      return;
+    }
+
+    ghost.textContent = '…';
+    debounceTimer = setTimeout(() => translateRowInput(row, input, ghost, gematria, raw), 500);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!row.dataset.hebrew || row.dataset.hebrew.length < 2) {
+      setStatus('Type a word (2+ letters once translated to Hebrew) before pressing Enter.');
+      return;
+    }
+    onSearch();
+    const next = addTermRow();
+    if (next) next.focus();
+  });
+}
+
+function addTermRow(prefillHebrew, label) {
   const rows = document.querySelectorAll('.term-row');
   if (rows.length >= MAX_TERMS) return null;
 
   const container = document.getElementById('term-rows');
   const row = document.createElement('div');
   row.className = 'term-row';
+  row.dataset.hebrew = '';
 
   const swatch = document.createElement('input');
   swatch.type = 'color';
@@ -260,19 +351,26 @@ function addTermRow(prefillValue, label) {
   swatch.title = 'Line color for this word';
   swatch.setAttribute('aria-label', 'Line color for this word');
 
+  const inputWrap = document.createElement('div');
+  inputWrap.className = 'term-input-wrap';
+
   const input = document.createElement('input');
   input.type = 'text';
-  input.className = 'heb-input';
-  input.dir = 'rtl';
-  input.maxLength = 12;
-  input.placeholder = 'הקלד מילה בעברית';
-  input.setAttribute('aria-label', 'Hebrew search word');
-  input.addEventListener('input', () => {
-    sanitizeHebrew(input);
-    delete input.dataset.label;
-  });
-  if (prefillValue) input.value = prefillValue;
-  if (label) input.dataset.label = label;
+  input.className = 'term-input';
+  input.maxLength = 40;
+  input.placeholder = 'Type a word in any language…';
+  input.setAttribute('aria-label', 'Search word, any language');
+
+  const ghost = document.createElement('span');
+  ghost.className = 'term-ghost';
+  ghost.setAttribute('aria-hidden', 'true');
+
+  inputWrap.appendChild(input);
+  inputWrap.appendChild(ghost);
+
+  const gematria = document.createElement('span');
+  gematria.className = 'term-gematria';
+  gematria.title = 'Gematria value';
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
@@ -285,17 +383,50 @@ function addTermRow(prefillValue, label) {
   });
 
   row.appendChild(swatch);
-  row.appendChild(input);
+  row.appendChild(inputWrap);
+  row.appendChild(gematria);
   row.appendChild(removeBtn);
   container.appendChild(row);
+
+  setupTermInput(row, input, ghost, gematria);
+
+  if (prefillHebrew) {
+    input.value = prefillHebrew;
+    row.dataset.hebrew = prefillHebrew;
+    if (label) row.dataset.label = label;
+    updateTermGematria(row, gematria);
+  }
+
   refreshTermRowState();
-  if (!activeInput) activeInput = input;
   return input;
 }
 
 function setupTermRows() {
   addTermRow('תורה', 'Torah');
-  document.getElementById('add-term-btn').addEventListener('click', () => addTermRow());
+  document.getElementById('add-term-btn').addEventListener('click', () => {
+    const next = addTermRow();
+    if (next) next.focus();
+  });
+}
+
+// ---------------------------------------------------------------------
+// Gematria calculator
+// ---------------------------------------------------------------------
+function setupGematriaCalculator() {
+  const input = document.getElementById('gematria-input');
+  const result = document.getElementById('gematria-result');
+
+  const update = () => {
+    sanitizeHebrew(input);
+    const word = input.value;
+    if (!word) { result.innerHTML = ''; return; }
+    const parts = word.split('').map((ch) => `${ch}(${letterValue(ch)})`);
+    result.innerHTML =
+      `<span class="total">${gematriaValue(word)}</span>` +
+      `<span class="gematria-breakdown">${parts.join(' + ')}</span>`;
+  };
+
+  input.addEventListener('input', update);
 }
 
 // ---------------------------------------------------------------------
@@ -330,123 +461,32 @@ async function labelForTerm(term) {
   }
 }
 
-function setupTranslation() {
-  const input = document.getElementById('translate-input');
-  const btn = document.getElementById('translate-btn');
-  const output = document.getElementById('translate-output');
-  const useBtn = document.getElementById('use-translation-btn');
-  const status = document.getElementById('translate-status');
-
-  let lastHebrew = '';
-  let lastOriginal = '';
-
-  async function doTranslate() {
-    const text = input.value.trim();
-    if (!text) {
-      status.textContent = 'Type a word or phrase first.';
-      return;
-    }
-
-    btn.disabled = true;
-    useBtn.disabled = true;
-    output.textContent = '';
-    lastHebrew = '';
-    lastOriginal = '';
-    status.textContent = 'Translating…';
-
-    try {
-      const { text: translated, detected } = await translateText(text, 'auto', 'iw');
-      const detectedLabel = detected ? ` (detected language: ${detected})` : '';
-
-      output.textContent = translated || '—';
-
-      const hebrewOnly = translated.replace(/[^א-ת]/g, '').slice(0, 12);
-      if (hebrewOnly.length >= 2) {
-        lastHebrew = hebrewOnly;
-        lastOriginal = text;
-        useBtn.disabled = false;
-        status.textContent = `Translated${detectedLabel}. Hebrew letters for searching: "${hebrewOnly}".`;
-      } else {
-        status.textContent = `Translated${detectedLabel}, but found fewer than 2 Hebrew letters in the result.`;
-      }
-    } catch (err) {
-      console.error(err);
-      status.textContent = 'Translation failed — check your internet connection and try again.';
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  btn.addEventListener('click', doTranslate);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      doTranslate();
-    }
-  });
-
-  const suggestions = document.getElementById('translate-suggestions');
-  TRANSLATE_SUGGESTIONS.forEach((word) => {
-    const sBtn = document.createElement('button');
-    sBtn.type = 'button';
-    sBtn.className = 'preset';
-    sBtn.textContent = word;
-    sBtn.addEventListener('click', () => {
-      input.value = word;
-      doTranslate();
-    });
-    suggestions.appendChild(sBtn);
-  });
-
-  useBtn.addEventListener('click', () => {
-    if (!lastHebrew) return;
-    const target = activeInput || document.querySelector('.heb-input');
-    if (target) {
-      target.value = lastHebrew;
-      target.dataset.label = lastOriginal;
-      labelCache.set(lastHebrew, lastOriginal);
-      target.focus();
-    }
-  });
-}
-
 // ---------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------
-async function onSearch() {
+async function onSearch(opts = {}) {
   const rows = Array.from(document.querySelectorAll('.term-row'));
   const entries = rows
-    .map((row) => {
-      const input = row.querySelector('.heb-input');
-      return {
-        term: input.value.trim(),
-        label: input.dataset.label,
-        color: row.querySelector('.term-color').value,
-      };
-    })
-    .filter((e) => e.term);
+    .map((row) => ({
+      term: row.dataset.hebrew || '',
+      label: row.dataset.label,
+      color: row.querySelector('.term-color').value,
+    }))
+    .filter((e) => e.term.length >= 2);
 
   if (entries.length === 0) {
-    setStatus('Enter at least one Hebrew word (2+ letters) to search for.');
+    if (!opts.silent) setStatus('Type at least one word (2+ Hebrew letters once translated) to search for.');
     return;
-  }
-  for (const e of entries) {
-    if (e.term.length < 2) {
-      setStatus(`"${e.term}" is too short — a word needs at least 2 letters.`);
-      return;
-    }
   }
 
   const minSkip = clamp(parseInt(document.getElementById('min-skip').value, 10) || 2, 1, 2000);
-  let maxSkip = clamp(parseInt(document.getElementById('max-skip').value, 10) || 2000, minSkip, 2000);
+  let maxSkip = clamp(parseInt(document.getElementById('max-skip').value, 10) || 200, minSkip, 2000);
   document.getElementById('min-skip').value = minSkip;
   document.getElementById('max-skip').value = maxSkip;
 
   const bookSel = document.getElementById('book-select').value;
   const range = bookSel === 'all' ? null : rangeForBook(bookSel);
 
-  const searchBtn = document.getElementById('search-btn');
-  searchBtn.disabled = true;
   document.getElementById('results').innerHTML = '';
   document.getElementById('overlap-status').textContent = '';
   clearGrid();
@@ -483,7 +523,6 @@ async function onSearch() {
     `Search complete in ${elapsed} ms — skip range ${minSkip}–${maxSkip}, ` +
     `${totalFound.toLocaleString()} total ELS occurrence(s) found.`
   );
-  searchBtn.disabled = false;
 
   openDrawer('results-drawer');
 }
@@ -573,6 +612,7 @@ function clearGrid() {
   document.getElementById('grid-container').innerHTML =
     '<p class="muted" id="grid-placeholder">Open "Search" below, run a search, then choose "View grid" on a result to explore the letter grid here.</p>';
   document.getElementById('grid-info').textContent = '';
+  clearCrosswordResults();
 }
 
 function showGrid(match) {
@@ -586,6 +626,7 @@ function showGrid(match) {
 
 function renderGrid() {
   if (state.currentCenter === undefined) return;
+  clearCrosswordResults();
   const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
   const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
   document.getElementById('grid-width').value = cols;
@@ -620,8 +661,21 @@ function renderGrid() {
     const tr = document.createElement('tr');
     for (const cell of row) {
       const td = document.createElement('td');
-      td.textContent = cell.char;
       if (cell.char) {
+        const content = document.createElement('div');
+        content.className = 'cell-content';
+
+        const letter = document.createElement('span');
+        letter.className = 'cell-letter';
+        letter.textContent = cell.char;
+
+        const num = document.createElement('span');
+        num.className = 'cell-num';
+        num.textContent = String(letterValue(cell.char));
+
+        content.appendChild(letter);
+        content.appendChild(num);
+        td.appendChild(content);
         td.title = refForIndex(cell.idx);
       }
       if (highlightMap.has(cell.idx)) {
@@ -982,6 +1036,153 @@ function findOverlapView() {
 }
 
 // ---------------------------------------------------------------------
+// Crossing Hebrew words — scans the visible grid in all 8 directions for
+// dictionary words (not tied to any search tag) that cross a cell from one
+// of the user's searched ELS lines.
+// ---------------------------------------------------------------------
+const HEBREW_WORDS = [
+  'תורה', 'משה', 'אהרן', 'דוד', 'שלמה', 'ישראל', 'יעקב', 'יצחק', 'אברהם', 'שרה',
+  'רבקה', 'רחל', 'לאה', 'יהוה', 'אלהים', 'שדי', 'אדני', 'שמים', 'ארץ', 'מים',
+  'אור', 'חשך', 'יום', 'לילה', 'שמש', 'ירח', 'כוכב', 'אדם', 'אשה', 'איש',
+  'מלך', 'גוי', 'עיר', 'בית', 'דרך', 'ספר', 'דבר', 'נפש', 'רוח', 'פרי',
+  'זרע', 'חיים', 'מות', 'שלום', 'אהבה', 'שנאה', 'אמונה', 'תקוה', 'חכמה', 'צדק',
+  'משפט', 'חטא', 'קדוש', 'טהור', 'טמא', 'ברכה', 'קללה', 'ברית', 'מצוה', 'עולם',
+  'ארון', 'מקדש', 'כהן', 'קרבן', 'מזבח', 'שבת', 'פסח', 'מדבר', 'נהר', 'מלאך',
+  'נביא', 'חלום', 'קול', 'עין', 'רגל', 'ראש', 'פנים', 'לחם', 'חרב', 'קשת',
+  'עבד', 'אדון', 'נחש', 'אהל', 'מחנה', 'צבא', 'מלחמה', 'שלל', 'אויב', 'גבור',
+  'חיל', 'עצם', 'בשר', 'עור', 'ראה', 'שמע', 'אמר', 'הלך', 'ישב', 'קום',
+  'בוא', 'יצא', 'עלה', 'ירד', 'נתן', 'לקח', 'עשה', 'ברא', 'ידע', 'אכל',
+  'שתה', 'כתב', 'קרא', 'שלח', 'מצא', 'בנה', 'ילד', 'חיה', 'מלא', 'חדש',
+  'ישן', 'גדול', 'קטן', 'טוב', 'יפה', 'חזק', 'חלש', 'עני', 'עשיר', 'ארבע',
+  'חמש', 'שבע', 'שמנה', 'תשע', 'עשר', 'מאה', 'אלף',
+];
+
+const CROSS_DIRECTIONS = [
+  [0, 1], [0, -1], [1, 0], [-1, 0],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+];
+
+function clearCrosswordResults() {
+  document.getElementById('crossword-results').innerHTML = '';
+  document.getElementById('crossword-status').textContent = '';
+}
+
+// Scans the currently rendered grid for dictionary words crossing any cell
+// that belongs to one of the user's searched ELS lines, then outlines them
+// on the grid and lists them with their gematria values.
+function runCrosswordSearch() {
+  const status = document.getElementById('crossword-status');
+  const resultsEl = document.getElementById('crossword-results');
+  resultsEl.innerHTML = '';
+
+  const table = document.querySelector('.els-grid');
+  if (state.currentCenter === undefined || !table) {
+    status.textContent = 'Run a search and open a grid view first.';
+    return;
+  }
+
+  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
+  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
+  const grid = buildGrid(state.currentCenter, rows, cols);
+  const topLeftIdx = grid[0][0].idx;
+  const bottomRightIdx = grid[rows - 1][cols - 1].idx;
+
+  const taggedCells = new Set();
+  for (const m of state.flatMatches) {
+    for (const idx of m.indices) {
+      if (idx >= topLeftIdx && idx <= bottomRightIdx) taggedCells.add(idx);
+    }
+  }
+
+  if (taggedCells.size === 0) {
+    status.textContent = 'None of your searched words appear in the current grid view.';
+    return;
+  }
+
+  document.querySelectorAll('.els-grid td.cross').forEach((td) => td.classList.remove('cross'));
+  document.querySelectorAll('.els-line-cross').forEach((el) => el.remove());
+
+  const taggedTerms = new Set(state.allResults.map((r) => r.term));
+  const found = [];
+  const seenKeys = new Set();
+
+  for (const word of HEBREW_WORDS) {
+    if (taggedTerms.has(word)) continue;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r][c].char !== word[0]) continue;
+        for (const [dr, dc] of CROSS_DIRECTIONS) {
+          const endR = r + dr * (word.length - 1);
+          const endC = c + dc * (word.length - 1);
+          if (endR < 0 || endR >= rows || endC < 0 || endC >= cols) continue;
+
+          const cells = [];
+          let ok = true;
+          for (let k = 0; k < word.length; k++) {
+            const cell = grid[r + dr * k][c + dc * k];
+            if (cell.char !== word[k]) { ok = false; break; }
+            cells.push(cell);
+          }
+          if (!ok || !cells.some((cell) => taggedCells.has(cell.idx))) continue;
+
+          const key = cells.map((cell) => cell.idx).join(',');
+          const revKey = cells.slice().reverse().map((cell) => cell.idx).join(',');
+          if (seenKeys.has(key) || seenKeys.has(revKey)) continue;
+          seenKeys.add(key);
+
+          found.push({ word, cells });
+        }
+      }
+    }
+  }
+
+  if (found.length === 0) {
+    status.textContent = 'No dictionary words found crossing your searched word(s) in this view.';
+    return;
+  }
+
+  found.sort((a, b) => b.word.length - a.word.length);
+  const shown = found.slice(0, 24);
+
+  const svg = document.querySelector('.els-lines');
+  for (const { cells } of shown) {
+    const points = [];
+    for (const cell of cells) {
+      const rel = cell.idx - topLeftIdx;
+      const r = Math.floor(rel / cols);
+      const c = rel % cols;
+      const td = table.rows[r]?.cells[c];
+      if (td) td.classList.add('cross');
+      points.push([cols - c - 0.5, r + 0.5]);
+    }
+    const line = document.createElementNS(SVG_NS, 'polyline');
+    line.setAttribute('points', points.map((p) => p.join(',')).join(' '));
+    line.setAttribute('class', 'els-line-cross');
+    svg.appendChild(line);
+  }
+
+  shown.forEach(({ word, cells }) => {
+    const chip = document.createElement('span');
+    chip.className = 'preset';
+    chip.title = refForIndex(cells[0].idx);
+    chip.textContent = `${word} (${gematriaValue(word)})`;
+    resultsEl.appendChild(chip);
+  });
+
+  const more = found.length > shown.length ? ` (showing top ${shown.length} by word length)` : '';
+  status.textContent = `Found ${found.length} crossing word(s)${more} — outlined on the grid.`;
+}
+
+function setupCrossword() {
+  document.getElementById('crossword-search-btn').addEventListener('click', runCrosswordSearch);
+  document.getElementById('crossword-btn').addEventListener('click', () => {
+    openDrawer('search-drawer');
+    runCrosswordSearch();
+    document.getElementById('crossword-search-btn').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+// ---------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------
 async function init() {
@@ -993,10 +1194,10 @@ async function init() {
   setupLayerMenu();
   setupTheme();
   setupTermRows();
-  setupTranslation();
+  setupGematriaCalculator();
+  setupCrossword();
   clearGrid();
 
-  document.getElementById('search-btn').addEventListener('click', onSearch);
   document.getElementById('grid-width').addEventListener('input', renderGrid);
   document.getElementById('grid-height').addEventListener('input', renderGrid);
   document.getElementById('find-overlap-btn').addEventListener('click', findOverlapView);
