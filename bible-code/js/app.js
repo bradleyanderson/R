@@ -1,4 +1,11 @@
-const COLORS = ['#c9a227', '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#e67e22'];
+const COLORS = ['#c9a227', '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#e67e22', '#16a085', '#d35400'];
+const MAX_TERMS = 30;
+
+function colorForIndex(i) {
+  if (i < COLORS.length) return COLORS[i];
+  const hue = (i * 47) % 360;
+  return `hsl(${hue}, 60%, 42%)`;
+}
 
 const HEB_LETTERS = [
   'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 'כ', 'ל',
@@ -18,8 +25,9 @@ const PRESETS = [
 ];
 
 const state = {
-  allResults: [],   // [{ term, color, matches }]
+  allResults: [],   // [{ term, label, color, matches }]
   flatMatches: [],  // every match across all terms
+  currentCenter: undefined,
 };
 
 let activeInput = null;
@@ -56,6 +64,113 @@ function setStatus(msg) {
 function rangeForBook(name) {
   const b = TorahData.books.find((b) => b.name === name);
   return b ? { start: b.start, length: b.length } : null;
+}
+
+// ---------------------------------------------------------------------
+// Drawers
+// ---------------------------------------------------------------------
+const DRAWER_TOGGLES = {
+  'theme-drawer': 'toggle-theme-btn',
+  'results-drawer': 'toggle-results-btn',
+  'search-drawer': 'toggle-search-btn',
+};
+
+function setDrawerOpen(id, open) {
+  document.getElementById(id).classList.toggle('open', open);
+  const btnId = DRAWER_TOGGLES[id];
+  if (btnId) document.getElementById(btnId).classList.toggle('active', open);
+}
+
+function openDrawer(id) {
+  setDrawerOpen(id, true);
+}
+
+function closeDrawer(id) {
+  setDrawerOpen(id, false);
+}
+
+function toggleDrawer(id) {
+  setDrawerOpen(id, !document.getElementById(id).classList.contains('open'));
+}
+
+function setupDrawers() {
+  document.getElementById('toggle-theme-btn').addEventListener('click', () => toggleDrawer('theme-drawer'));
+  document.getElementById('toggle-results-btn').addEventListener('click', () => toggleDrawer('results-drawer'));
+  document.getElementById('toggle-search-btn').addEventListener('click', () => toggleDrawer('search-drawer'));
+  document.getElementById('search-drawer-handle').addEventListener('click', () => toggleDrawer('search-drawer'));
+
+  document.querySelectorAll('.drawer-close').forEach((btn) => {
+    btn.addEventListener('click', () => closeDrawer(btn.dataset.close));
+  });
+
+  // Search drawer starts open so first-time users see the controls.
+  openDrawer('search-drawer');
+}
+
+// Measure the top bar's real height (it wraps onto two lines on narrow
+// screens) so the side drawers can start below it instead of covering it.
+function setupLayout() {
+  const topBar = document.getElementById('top-bar');
+  const update = () => {
+    document.documentElement.style.setProperty('--topbar-h', `${topBar.getBoundingClientRect().height}px`);
+  };
+  update();
+  window.addEventListener('resize', update);
+}
+
+// ---------------------------------------------------------------------
+// Theme customizer
+// ---------------------------------------------------------------------
+const THEME_VARS = {
+  'theme-bg': '--parchment',
+  'theme-panel': '--parchment-dark',
+  'theme-ink': '--ink',
+  'theme-accent': '--gold-dark',
+};
+const THEME_STORAGE_KEY = 'bibleCodeTheme';
+
+function applyTheme(theme) {
+  for (const [inputId, varName] of Object.entries(THEME_VARS)) {
+    if (theme[inputId]) document.documentElement.style.setProperty(varName, theme[inputId]);
+  }
+}
+
+function loadSavedTheme() {
+  try {
+    return JSON.parse(localStorage.getItem(THEME_STORAGE_KEY) || '{}');
+  } catch (err) {
+    return {};
+  }
+}
+
+function setupTheme() {
+  const defaults = {};
+  for (const [inputId, varName] of Object.entries(THEME_VARS)) {
+    defaults[inputId] = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+
+  const saved = loadSavedTheme();
+  const current = { ...defaults, ...saved };
+  applyTheme(current);
+
+  for (const inputId of Object.keys(THEME_VARS)) {
+    const input = document.getElementById(inputId);
+    input.value = current[inputId];
+    input.addEventListener('input', () => {
+      const theme = loadSavedTheme();
+      theme[inputId] = input.value;
+      localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(theme));
+      applyTheme({ [inputId]: input.value });
+    });
+  }
+
+  document.getElementById('theme-reset').addEventListener('click', () => {
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    for (const [inputId, varName] of Object.entries(THEME_VARS)) {
+      document.documentElement.style.removeProperty(varName);
+      document.getElementById(inputId).value = defaults[inputId];
+    }
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -106,6 +221,7 @@ function setupKeyboard() {
     const target = activeInput || document.querySelector('.heb-input');
     if (!target) return;
     target.value = '';
+    delete target.dataset.label;
     target.focus();
   });
   board.appendChild(clear);
@@ -118,15 +234,17 @@ function refreshTermRowColors() {
   const rows = document.querySelectorAll('.term-row');
   rows.forEach((row, i) => {
     const swatch = row.querySelector('.swatch');
-    swatch.style.background = COLORS[i % COLORS.length];
+    swatch.style.background = colorForIndex(i);
     const removeBtn = row.querySelector('.remove-term');
     removeBtn.disabled = rows.length <= 1;
   });
+  const addBtn = document.getElementById('add-term-btn');
+  addBtn.disabled = rows.length >= MAX_TERMS;
 }
 
-function addTermRow(prefillValue) {
+function addTermRow(prefillValue, label) {
   const rows = document.querySelectorAll('.term-row');
-  if (rows.length >= 4) return;
+  if (rows.length >= MAX_TERMS) return null;
 
   const container = document.getElementById('term-rows');
   const row = document.createElement('div');
@@ -142,8 +260,12 @@ function addTermRow(prefillValue) {
   input.maxLength = 12;
   input.placeholder = 'הקלד מילה בעברית';
   input.setAttribute('aria-label', 'Hebrew search word');
-  input.addEventListener('input', () => sanitizeHebrew(input));
+  input.addEventListener('input', () => {
+    sanitizeHebrew(input);
+    delete input.dataset.label;
+  });
   if (prefillValue) input.value = prefillValue;
+  if (label) input.dataset.label = label;
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
@@ -161,10 +283,11 @@ function addTermRow(prefillValue) {
   container.appendChild(row);
   refreshTermRowColors();
   if (!activeInput) activeInput = input;
+  return input;
 }
 
 function setupTermRows() {
-  addTermRow('תורה');
+  addTermRow('תורה', 'Torah');
   document.getElementById('add-term-btn').addEventListener('click', () => addTermRow());
 }
 
@@ -179,6 +302,8 @@ function setupPresets() {
       const target = activeInput || document.querySelector('.heb-input');
       if (target) {
         target.value = p.value;
+        const m = p.label.match(/\(([^)]+)\)/);
+        target.dataset.label = m ? m[1] : p.label;
         target.focus();
       }
     });
@@ -189,6 +314,35 @@ function setupPresets() {
 // ---------------------------------------------------------------------
 // Translation
 // ---------------------------------------------------------------------
+const labelCache = new Map(); // Hebrew term -> label in another language
+
+async function translateText(text, sl, tl) {
+  const url = 'https://translate.googleapis.com/translate_a/single'
+    + `?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=` + encodeURIComponent(text);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return {
+    text: (data[0] || []).map((seg) => seg[0]).join(''),
+    detected: data[2] || null,
+  };
+}
+
+// Best-effort label for a Hebrew search term, used to tag its line in the
+// grid. Falls back to the Hebrew term itself if translation is unavailable.
+async function labelForTerm(term) {
+  if (labelCache.has(term)) return labelCache.get(term);
+  try {
+    const { text } = await translateText(term, 'iw', 'en');
+    const label = text.trim() || term;
+    labelCache.set(term, label);
+    return label;
+  } catch (err) {
+    labelCache.set(term, term);
+    return term;
+  }
+}
+
 function setupTranslation() {
   const input = document.getElementById('translate-input');
   const btn = document.getElementById('translate-btn');
@@ -197,6 +351,7 @@ function setupTranslation() {
   const status = document.getElementById('translate-status');
 
   let lastHebrew = '';
+  let lastOriginal = '';
 
   async function doTranslate() {
     const text = input.value.trim();
@@ -209,26 +364,23 @@ function setupTranslation() {
     useBtn.disabled = true;
     output.textContent = '';
     lastHebrew = '';
+    lastOriginal = '';
     status.textContent = 'Translating…';
 
     try {
-      const url = 'https://translate.googleapis.com/translate_a/single'
-        + '?client=gtx&sl=auto&tl=iw&dt=t&q=' + encodeURIComponent(text);
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const translated = (data[0] || []).map((seg) => seg[0]).join('');
-      const detected = data[2] ? ` (detected language: ${data[2]})` : '';
+      const { text: translated, detected } = await translateText(text, 'auto', 'iw');
+      const detectedLabel = detected ? ` (detected language: ${detected})` : '';
 
       output.textContent = translated || '—';
 
       const hebrewOnly = translated.replace(/[^א-ת]/g, '').slice(0, 12);
       if (hebrewOnly.length >= 2) {
         lastHebrew = hebrewOnly;
+        lastOriginal = text;
         useBtn.disabled = false;
-        status.textContent = `Translated${detected}. Hebrew letters for searching: "${hebrewOnly}".`;
+        status.textContent = `Translated${detectedLabel}. Hebrew letters for searching: "${hebrewOnly}".`;
       } else {
-        status.textContent = `Translated${detected}, but found fewer than 2 Hebrew letters in the result.`;
+        status.textContent = `Translated${detectedLabel}, but found fewer than 2 Hebrew letters in the result.`;
       }
     } catch (err) {
       console.error(err);
@@ -251,6 +403,8 @@ function setupTranslation() {
     const target = activeInput || document.querySelector('.heb-input');
     if (target) {
       target.value = lastHebrew;
+      target.dataset.label = lastOriginal;
+      labelCache.set(lastHebrew, lastOriginal);
       target.focus();
     }
   });
@@ -261,15 +415,17 @@ function setupTranslation() {
 // ---------------------------------------------------------------------
 async function onSearch() {
   const termInputs = Array.from(document.querySelectorAll('.heb-input'));
-  const terms = termInputs.map((i) => i.value.trim()).filter(Boolean);
+  const entries = termInputs
+    .map((input) => ({ term: input.value.trim(), label: input.dataset.label }))
+    .filter((e) => e.term);
 
-  if (terms.length === 0) {
+  if (entries.length === 0) {
     setStatus('Enter at least one Hebrew word (2+ letters) to search for.');
     return;
   }
-  for (const t of terms) {
-    if (t.length < 2) {
-      setStatus(`"${t}" is too short — a word needs at least 2 letters.`);
+  for (const e of entries) {
+    if (e.term.length < 2) {
+      setStatus(`"${e.term}" is too short — a word needs at least 2 letters.`);
       return;
     }
   }
@@ -284,23 +440,27 @@ async function onSearch() {
 
   const searchBtn = document.getElementById('search-btn');
   searchBtn.disabled = true;
-  setStatus('Searching…');
   document.getElementById('results').innerHTML = '';
-  document.getElementById('grid-container').innerHTML = '';
-  document.getElementById('grid-info').textContent = '';
+  document.getElementById('overlap-status').textContent = '';
+  clearGrid();
 
-  // Yield so the "Searching..." status paints before the heavy loop.
+  setStatus('Looking up word labels…');
+  await Promise.all(entries.map(async (e) => {
+    if (!e.label) e.label = await labelForTerm(e.term);
+  }));
+
+  setStatus('Searching…');
   await new Promise((r) => setTimeout(r, 0));
 
   const t0 = performance.now();
   const allResults = [];
-  for (let ti = 0; ti < terms.length; ti++) {
-    const term = terms[ti];
+  for (let ti = 0; ti < entries.length; ti++) {
+    const { term, label } = entries[ti];
     const matches = searchELS(term, minSkip, maxSkip, range, 1000);
     matches.sort((a, b) => Math.abs(a.skip) - Math.abs(b.skip) || a.start - b.start);
-    const color = COLORS[ti % COLORS.length];
-    matches.forEach((m) => { m.color = color; m.term = term; });
-    allResults.push({ term, color, matches });
+    const color = colorForIndex(ti);
+    matches.forEach((m) => { m.color = color; m.term = term; m.label = label; });
+    allResults.push({ term, label, color, matches });
     await new Promise((r) => setTimeout(r, 0));
   }
   const elapsed = (performance.now() - t0).toFixed(0);
@@ -316,6 +476,8 @@ async function onSearch() {
     `${totalFound.toLocaleString()} total ELS occurrence(s) found.`
   );
   searchBtn.disabled = false;
+
+  openDrawer('results-drawer');
 }
 
 function renderResults(allResults, minSkip, maxSkip) {
@@ -331,7 +493,14 @@ function renderResults(allResults, minSkip, maxSkip) {
     swatch.className = 'swatch';
     swatch.style.background = r.color;
     heading.appendChild(swatch);
-    heading.appendChild(document.createTextNode(` ${r.term} — ${r.matches.length.toLocaleString()} match(es)`));
+    heading.appendChild(document.createTextNode(` ${r.term} `));
+    if (r.label && r.label !== r.term) {
+      const tag = document.createElement('span');
+      tag.className = 'muted';
+      tag.textContent = `"${r.label}"`;
+      heading.appendChild(tag);
+    }
+    heading.appendChild(document.createTextNode(` — ${r.matches.length.toLocaleString()} match(es)`));
     section.appendChild(heading);
 
     if (r.matches.length === 0) {
@@ -391,20 +560,26 @@ function renderResults(allResults, minSkip, maxSkip) {
 // ---------------------------------------------------------------------
 // Grid
 // ---------------------------------------------------------------------
+function clearGrid() {
+  state.currentCenter = undefined;
+  document.getElementById('grid-container').innerHTML =
+    '<p class="muted" id="grid-placeholder">Open "Search" below, run a search, then choose "View grid" on a result to explore the letter grid here.</p>';
+  document.getElementById('grid-info').textContent = '';
+}
+
 function showGrid(match) {
   const center = centerOfMatch(match);
-  const suggested = clamp(Math.abs(match.skip) || 10, 5, 60);
+  const suggested = clamp(Math.abs(match.skip) || 10, 5, 80);
   document.getElementById('grid-width').value = suggested;
   document.getElementById('grid-height').value = suggested;
   state.currentCenter = center;
   renderGrid();
-  document.getElementById('grid-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function renderGrid() {
   if (state.currentCenter === undefined) return;
-  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 80);
-  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 80);
+  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
+  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
   document.getElementById('grid-width').value = cols;
   document.getElementById('grid-height').value = rows;
 
@@ -413,7 +588,7 @@ function renderGrid() {
   const bottomRightIdx = grid[rows - 1][cols - 1].idx;
 
   const highlightMap = new Map(); // idx -> Set of colors
-  const linePaths = []; // { color, points: [[x, y], ...] }
+  const linePaths = []; // { color, label, points: [[x, y], ...] }
   for (const m of state.flatMatches) {
     const pts = [];
     for (const idx of m.indices) {
@@ -427,7 +602,7 @@ function renderGrid() {
         pts.push([cols - c - 0.5, r + 0.5]); // RTL columns: 0 is rightmost
       }
     }
-    if (pts.length >= 2) linePaths.push({ color: m.color, points: pts });
+    if (pts.length >= 2) linePaths.push({ color: m.color, label: m.label, points: pts });
   }
 
   const table = document.createElement('table');
@@ -468,7 +643,7 @@ function renderGrid() {
     `Highlighted cells show every searched word that falls inside this view, including ones that cross.`;
 }
 
-// Build an SVG overlay with one polyline + start marker per match,
+// Build an SVG overlay with one polyline + start marker + label per match,
 // connecting its letters from first to last in the grid's cell coordinates.
 const SVG_NS = 'http://www.w3.org/2000/svg';
 function buildLinesSVG(rows, cols, linePaths) {
@@ -477,7 +652,7 @@ function buildLinesSVG(rows, cols, linePaths) {
   svg.setAttribute('viewBox', `0 0 ${cols} ${rows}`);
   svg.setAttribute('preserveAspectRatio', 'none');
 
-  for (const { color, points } of linePaths) {
+  for (const { color, label, points } of linePaths) {
     const pointsAttr = points.map((p) => p.join(',')).join(' ');
 
     const halo = document.createElementNS(SVG_NS, 'polyline');
@@ -498,23 +673,140 @@ function buildLinesSVG(rows, cols, linePaths) {
     start.setAttribute('class', 'els-line-start');
     start.setAttribute('fill', color);
     svg.appendChild(start);
+
+    if (label) {
+      const mid = points[Math.floor(points.length / 2)];
+      const [x1, y1] = points[0];
+      const [x2, y2] = points[points.length - 1];
+      let angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+      if (angle > 90) angle -= 180;
+      if (angle < -90) angle += 180;
+
+      const text = document.createElementNS(SVG_NS, 'text');
+      text.setAttribute('x', mid[0]);
+      text.setAttribute('y', mid[1]);
+      text.setAttribute('font-size', '0.4');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
+      text.setAttribute('transform', `rotate(${angle.toFixed(1)} ${mid[0]} ${mid[1]})`);
+      text.setAttribute('class', 'els-line-label');
+      text.setAttribute('fill', color);
+      text.textContent = label;
+      svg.appendChild(text);
+    }
   }
 
   return svg;
 }
 
 // ---------------------------------------------------------------------
+// Overlap finder — jump the grid to where two or more searched words
+// cross (share a letter), or come closest together if none cross.
+// ---------------------------------------------------------------------
+function findOverlapView() {
+  const status = document.getElementById('overlap-status');
+  const matches = state.flatMatches;
+
+  if (matches.length === 0) {
+    status.textContent = 'Run a search first.';
+    return;
+  }
+
+  const distinctTerms = new Set(matches.map((m) => m.term));
+  if (distinctTerms.size < 2) {
+    status.textContent = 'Add a second search word and run the search again to look for overlaps.';
+    return;
+  }
+
+  // idx -> set of terms whose ELS line passes through this letter
+  const idxToTerms = new Map();
+  for (const m of matches) {
+    for (const idx of m.indices) {
+      let set = idxToTerms.get(idx);
+      if (!set) { set = new Set(); idxToTerms.set(idx, set); }
+      set.add(m.term);
+    }
+  }
+
+  let bestIdx = null;
+  let bestCount = 1;
+  for (const [idx, terms] of idxToTerms) {
+    if (terms.size > bestCount) {
+      bestCount = terms.size;
+      bestIdx = idx;
+    }
+  }
+
+  let center, size, message;
+
+  if (bestIdx !== null) {
+    const here = matches.filter((m) => m.indices.includes(bestIdx));
+    let lo = Infinity, hi = -Infinity;
+    for (const m of here) {
+      for (const idx of m.indices) {
+        if (idx < lo) lo = idx;
+        if (idx > hi) hi = idx;
+      }
+    }
+    const span = hi - lo;
+    center = Math.round((lo + hi) / 2);
+    size = clamp(Math.ceil(Math.sqrt(span + 1)) + 2, 4, 100);
+    const labels = Array.from(new Set(here.map((m) => m.label || m.term)));
+    message = `Found ${bestCount} words crossing at the same letter near ${refForIndex(bestIdx)}: "${labels.join('", "')}".`;
+  } else {
+    // No shared letters — find the closest pair of matches from different terms.
+    const sorted = matches.slice().sort((a, b) => centerOfMatch(a) - centerOfMatch(b));
+    const lastSeen = new Map(); // term -> { center, match }
+    let bestDist = Infinity;
+    let bestPair = null;
+    for (const m of sorted) {
+      const c = centerOfMatch(m);
+      for (const [term, prev] of lastSeen) {
+        if (term === m.term) continue;
+        const dist = Math.abs(c - prev.center);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestPair = [prev.match, m];
+        }
+      }
+      lastSeen.set(m.term, { center: c, match: m });
+    }
+
+    const [m1, m2] = bestPair;
+    const allIdx = [...m1.indices, ...m2.indices];
+    const lo = Math.min(...allIdx);
+    const hi = Math.max(...allIdx);
+    const span = hi - lo;
+    center = Math.round((lo + hi) / 2);
+    size = clamp(Math.ceil(Math.sqrt(span + 1)) + 2, 4, 100);
+    message = `"${m1.label || m1.term}" and "${m2.label || m2.term}" don't share a letter, ` +
+      `but their closest occurrences come together near ${refForIndex(center)}.`;
+  }
+
+  document.getElementById('grid-width').value = size;
+  document.getElementById('grid-height').value = size;
+  state.currentCenter = center;
+  renderGrid();
+  status.textContent = message;
+}
+
+// ---------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------
 async function init() {
+  setupLayout();
+  setupDrawers();
+  setupTheme();
   setupKeyboard();
   setupTermRows();
   setupPresets();
   setupTranslation();
+  clearGrid();
 
   document.getElementById('search-btn').addEventListener('click', onSearch);
   document.getElementById('grid-width').addEventListener('input', renderGrid);
   document.getElementById('grid-height').addEventListener('input', renderGrid);
+  document.getElementById('find-overlap-btn').addEventListener('click', findOverlapView);
 
   setStatus('Loading Torah text…');
   try {

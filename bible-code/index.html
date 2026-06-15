@@ -4,134 +4,171 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bible Code Explorer — Torah ELS Search</title>
-  <meta name="description" content="Search the Hebrew text of the Torah for hidden equidistant letter sequences (ELS), the classic 'Bible Code' phenomenon, and visualize the results in a letter grid." />
+  <meta name="description" content="Search the Hebrew text of the Torah for hidden equidistant letter sequences (ELS), the classic 'Bible Code' phenomenon, and visualize the results in a full-screen letter grid." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Cinzel:wght@600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <header class="site-header">
-    <h1>📜 Bible Code Explorer</h1>
-    <p class="subtitle">Search the Torah (Genesis–Deuteronomy) for hidden Equidistant Letter Sequences (ELS)</p>
-  </header>
-
-  <main>
-    <section class="panel" id="search-panel">
-      <h2>1. Choose your word(s)</h2>
-      <div id="term-rows"></div>
-      <button type="button" id="add-term-btn" class="secondary">+ Add another word</button>
-
-      <h3>Quick examples</h3>
-      <div id="presets" class="presets"></div>
-
-      <h3>Translate to Hebrew</h3>
-      <p class="muted">
-        Don't know the Hebrew spelling? Type a word or short phrase in any
-        language, translate it, then send the result to a search box above.
-      </p>
-      <div class="translate-row">
-        <input type="text" id="translate-input" class="translate-input" placeholder="e.g. light, lumière, 平和…" />
-        <button type="button" id="translate-btn" class="secondary">Translate</button>
+  <div id="app">
+    <header id="top-bar">
+      <h1>📜 Bible Code Explorer</h1>
+      <div class="top-bar-actions">
+        <button type="button" id="toggle-theme-btn" class="icon-btn" title="Theme settings" aria-label="Theme settings">🎨 Theme</button>
+        <button type="button" id="toggle-search-btn" class="icon-btn" title="Search words" aria-label="Search words">🔍 Search</button>
+        <button type="button" id="toggle-results-btn" class="icon-btn" title="Results" aria-label="Results">📋 Results</button>
       </div>
-      <div class="translate-row">
-        <div id="translate-output" class="heb-output" dir="rtl" lang="he"></div>
-        <button type="button" id="use-translation-btn" class="secondary" disabled>Use this word</button>
-      </div>
-      <p id="translate-status" class="muted"></p>
+    </header>
 
-      <h3>Hebrew keyboard</h3>
-      <div id="keyboard" class="keyboard"></div>
-
-      <h2>2. Set your search range</h2>
-      <div class="controls-row">
-        <label>
-          Min skip
-          <input type="number" id="min-skip" value="2" min="1" max="2000" />
-        </label>
-        <label>
-          Max skip
-          <input type="number" id="max-skip" value="50" min="1" max="2000" />
-        </label>
-        <label>
-          Search in
-          <select id="book-select">
-            <option value="all" selected>Whole Torah</option>
-            <option value="Genesis">Genesis only</option>
-            <option value="Exodus">Exodus only</option>
-            <option value="Leviticus">Leviticus only</option>
-            <option value="Numbers">Numbers only</option>
-            <option value="Deuteronomy">Deuteronomy only</option>
-          </select>
-        </label>
-      </div>
-      <p class="muted">
-        "Skip" is how many letters apart each letter of the word is in the raw text
-        (skip 1 = the word as normally written). Larger skip ranges find more
-        matches but take longer to search.
-      </p>
-
-      <button type="button" id="search-btn" class="primary">Search</button>
-      <p id="status" class="status">Loading Torah text…</p>
-    </section>
-
-    <section class="panel" id="results-panel">
-      <h2>3. Results</h2>
-      <div id="results"></div>
-    </section>
-
-    <section class="panel" id="grid-section">
-      <h2>4. Letter grid</h2>
-      <div class="controls-row">
+    <main id="grid-stage">
+      <div id="grid-toolbar">
         <label>
           Grid width
-          <input type="range" id="grid-width" min="4" max="80" value="10" />
+          <input type="range" id="grid-width" min="4" max="100" value="24" />
         </label>
         <label>
           Grid height
-          <input type="range" id="grid-height" min="4" max="80" value="10" />
+          <input type="range" id="grid-height" min="4" max="100" value="24" />
         </label>
+        <button type="button" id="find-overlap-btn" class="secondary">Find crossing words</button>
+        <span id="grid-info" class="muted"></span>
       </div>
-      <p class="muted">
-        The grid reads right-to-left, top-to-bottom, like Hebrew text. Highlighted
-        letters show your search word(s) along their equidistant line, and a
-        colored line connects each occurrence from its first letter (marked with
-        a dot) to its last. If two words' letters land in the same view, both are
-        highlighted and connected — a "crossing".
-      </p>
-      <div id="grid-info" class="muted"></div>
-      <div id="grid-container" class="grid-scroll"></div>
-    </section>
+      <div id="grid-container" class="grid-scroll">
+        <p class="muted" id="grid-placeholder">Open "Search" below, run a search, then choose "View grid" on a result to explore the letter grid here.</p>
+      </div>
+      <p id="overlap-status" class="muted"></p>
+      <p id="status" class="status">Loading Torah text…</p>
+    </main>
 
-    <section class="panel" id="about-panel">
-      <h2>About this tool</h2>
-      <p>
-        This app searches the consonantal Hebrew text of the Torah (Westminster
-        Leningrad Codex, the same public-domain source text used in Bible code
-        research) for <strong>Equidistant Letter Sequences</strong> — occurrences
-        of a word's letters spaced an equal number of letters apart, in either
-        direction, anywhere across all five books of the Torah treated as one
-        continuous string of <span id="letter-count">305,172</span> letters.
-      </p>
-      <p>
-        This phenomenon was popularized by Michael Drosnin's book
-        <em>The Bible Code</em> and a 1994 paper by Witztum, Rips, and Rosenberg.
-        It's worth knowing that the statistical claims behind it have been
-        strongly challenged — most notably by Brendan McKay and colleagues, who
-        showed similar "codes" can be found in any sufficiently long text,
-        including <em>War and Peace</em>. With ~300,000 letters and a generous
-        skip range, almost any short word can be found purely by chance.
-      </p>
-      <p>
-        Treat this as a fun way to explore the text and the math behind ELS —
-        not as evidence of anything supernatural.
-      </p>
-    </section>
-  </main>
+    <!-- Theme drawer (left) -->
+    <aside id="theme-drawer" class="drawer drawer-left">
+      <div class="drawer-header">
+        <h2>Theme</h2>
+        <button type="button" class="drawer-close" data-close="theme-drawer" aria-label="Close theme panel">✕</button>
+      </div>
+      <div class="drawer-body">
+        <p class="muted">Pick colors for the whole app. Choices are saved on this device.</p>
+        <label class="color-row">
+          Background
+          <input type="color" id="theme-bg" />
+        </label>
+        <label class="color-row">
+          Panels &amp; drawers
+          <input type="color" id="theme-panel" />
+        </label>
+        <label class="color-row">
+          Text
+          <input type="color" id="theme-ink" />
+        </label>
+        <label class="color-row">
+          Accent
+          <input type="color" id="theme-accent" />
+        </label>
+        <button type="button" id="theme-reset" class="secondary">Reset to default</button>
+      </div>
+    </aside>
 
-  <footer class="site-footer">
-    <p>Text source: Open Scriptures Hebrew Bible (Westminster Leningrad Codex), public domain.</p>
-  </footer>
+    <!-- Results drawer (right) -->
+    <aside id="results-drawer" class="drawer drawer-right">
+      <div class="drawer-header">
+        <h2>Results</h2>
+        <button type="button" class="drawer-close" data-close="results-drawer" aria-label="Close results panel">✕</button>
+      </div>
+      <div class="drawer-body">
+        <div id="results"></div>
+      </div>
+    </aside>
+
+    <!-- Search drawer (bottom) -->
+    <section id="search-drawer" class="drawer drawer-bottom">
+      <button type="button" class="drawer-handle" id="search-drawer-handle">
+        <span>Search words &amp; settings</span>
+        <span class="handle-arrow" aria-hidden="true">▲</span>
+      </button>
+      <div class="drawer-body">
+        <h3>1. Choose your word(s)</h3>
+        <div id="term-rows"></div>
+        <button type="button" id="add-term-btn" class="secondary">+ Add another word</button>
+
+        <h3>Quick examples</h3>
+        <div id="presets" class="presets"></div>
+
+        <h3>Translate to Hebrew</h3>
+        <p class="muted">
+          Don't know the Hebrew spelling? Type a word or short phrase in any
+          language, translate it, then send the result to a search box above.
+        </p>
+        <div class="translate-row">
+          <input type="text" id="translate-input" class="translate-input" placeholder="e.g. light, lumière, 平和…" />
+          <button type="button" id="translate-btn" class="secondary">Translate</button>
+        </div>
+        <div class="translate-row">
+          <div id="translate-output" class="heb-output" dir="rtl" lang="he"></div>
+          <button type="button" id="use-translation-btn" class="secondary" disabled>Use this word</button>
+        </div>
+        <p id="translate-status" class="muted"></p>
+
+        <h3>Hebrew keyboard</h3>
+        <div id="keyboard" class="keyboard"></div>
+
+        <h3>2. Set your search range</h3>
+        <div class="controls-row">
+          <label>
+            Min skip
+            <input type="number" id="min-skip" value="2" min="1" max="2000" />
+          </label>
+          <label>
+            Max skip
+            <input type="number" id="max-skip" value="50" min="1" max="2000" />
+          </label>
+          <label>
+            Search in
+            <select id="book-select">
+              <option value="all" selected>Whole Torah</option>
+              <option value="Genesis">Genesis only</option>
+              <option value="Exodus">Exodus only</option>
+              <option value="Leviticus">Leviticus only</option>
+              <option value="Numbers">Numbers only</option>
+              <option value="Deuteronomy">Deuteronomy only</option>
+            </select>
+          </label>
+        </div>
+        <p class="muted">
+          "Skip" is how many letters apart each letter of the word is in the raw text
+          (skip 1 = the word as normally written). Larger skip ranges find more
+          matches but take longer to search. Add up to 30 words — each gets its own
+          color and a label, shown along its line in the grid. Use
+          "Find crossing words" on the grid to jump to a spot where two or more of
+          your words intersect.
+        </p>
+
+        <button type="button" id="search-btn" class="primary">Search</button>
+
+        <details class="about-details">
+          <summary>About this tool</summary>
+          <p>
+            This app searches the consonantal Hebrew text of the Torah (Westminster
+            Leningrad Codex, the same public-domain source text used in Bible code
+            research) for <strong>Equidistant Letter Sequences</strong> — occurrences
+            of a word's letters spaced an equal number of letters apart, in either
+            direction, anywhere across all five books of the Torah treated as one
+            continuous string of <span id="letter-count">305,172</span> letters.
+          </p>
+          <p>
+            This phenomenon was popularized by Michael Drosnin's book
+            <em>The Bible Code</em> and a 1994 paper by Witztum, Rips, and Rosenberg.
+            It's worth knowing that the statistical claims behind it have been
+            strongly challenged — most notably by Brendan McKay and colleagues, who
+            showed similar "codes" can be found in any sufficiently long text,
+            including <em>War and Peace</em>. With ~300,000 letters and a generous
+            skip range, almost any short word can be found purely by chance.
+          </p>
+          <p class="muted">Text source: Open Scriptures Hebrew Bible (Westminster Leningrad Codex), public domain.</p>
+        </details>
+      </div>
+    </section>
+  </div>
 
   <script src="js/els.js"></script>
   <script src="js/app.js"></script>
