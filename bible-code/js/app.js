@@ -1,10 +1,22 @@
 const COLORS = ['#c9a227', '#c0392b', '#2980b9', '#27ae60', '#8e44ad', '#e67e22', '#16a085', '#d35400'];
 const MAX_TERMS = 30;
 
+// Converts an HSL color to a #rrggbb hex string, so generated colors can be
+// used as <input type="color"> values (which require hex).
+function hslToHex(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toHex = (x) => Math.round(255 * x).toString(16).padStart(2, '0');
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+}
+
 function colorForIndex(i) {
   if (i < COLORS.length) return COLORS[i];
   const hue = (i * 47) % 360;
-  return `hsl(${hue}, 60%, 42%)`;
+  return hslToHex(hue, 60, 42);
 }
 
 const HEB_LETTERS = [
@@ -87,7 +99,6 @@ function openDrawer(id) {
 
 function closeDrawer(id) {
   setDrawerOpen(id, false);
-  document.getElementById(id).classList.remove('peek');
 }
 
 function toggleDrawer(id) {
@@ -119,34 +130,57 @@ function setupLayout() {
   window.addEventListener('resize', update);
 }
 
-// Reveal a drawer when the pointer nears its screen edge, and hide it
-// again once the pointer leaves both the edge zone and the drawer
-// (an explicitly opened/"pinned" drawer stays open regardless).
-function setupHoverReveal() {
-  const zones = [
-    { zoneId: 'hover-zone-left', drawerId: 'theme-drawer' },
-    { zoneId: 'hover-zone-right', drawerId: 'results-drawer' },
-    { zoneId: 'hover-zone-bottom', drawerId: 'search-drawer' },
-  ];
+// ---------------------------------------------------------------------
+// Grid zoom
+// ---------------------------------------------------------------------
+const ZOOM_LEVELS = [0.5, 0.6, 0.75, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2, 2.5, 3];
 
-  zones.forEach(({ zoneId, drawerId }) => {
-    const zone = document.getElementById(zoneId);
-    const drawer = document.getElementById(drawerId);
-    let hideTimer = null;
+function setupZoom() {
+  let zoomIndex = ZOOM_LEVELS.indexOf(1);
+  const levelEl = document.getElementById('zoom-level');
+  const outBtn = document.getElementById('zoom-out-btn');
+  const inBtn = document.getElementById('zoom-in-btn');
 
-    const reveal = () => {
-      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
-      drawer.classList.add('peek');
-    };
-    const scheduleHide = () => {
-      if (hideTimer) clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => drawer.classList.remove('peek'), 350);
-    };
+  const apply = () => {
+    const zoom = ZOOM_LEVELS[zoomIndex];
+    document.documentElement.style.setProperty('--cell-zoom', zoom);
+    levelEl.textContent = `${Math.round(zoom * 100)}%`;
+    outBtn.disabled = zoomIndex === 0;
+    inBtn.disabled = zoomIndex === ZOOM_LEVELS.length - 1;
+  };
 
-    zone.addEventListener('mouseenter', reveal);
-    zone.addEventListener('mouseleave', scheduleHide);
-    drawer.addEventListener('mouseenter', reveal);
-    drawer.addEventListener('mouseleave', scheduleHide);
+  outBtn.addEventListener('click', () => {
+    zoomIndex = clamp(zoomIndex - 1, 0, ZOOM_LEVELS.length - 1);
+    apply();
+  });
+  inBtn.addEventListener('click', () => {
+    zoomIndex = clamp(zoomIndex + 1, 0, ZOOM_LEVELS.length - 1);
+    apply();
+  });
+
+  apply();
+}
+
+// ---------------------------------------------------------------------
+// Full screen
+// ---------------------------------------------------------------------
+function setupFullscreen() {
+  const btn = document.getElementById('fullscreen-btn');
+
+  btn.addEventListener('click', () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    const isFull = !!document.fullscreenElement;
+    btn.classList.toggle('active', isFull);
+    const label = isFull ? 'Exit full screen' : 'Enter full screen';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
   });
 }
 
@@ -156,6 +190,7 @@ function setupHoverReveal() {
 const THEME_VARS = {
   'theme-bg': '--parchment',
   'theme-panel': '--parchment-dark',
+  'theme-grid-bg': '--grid-bg',
   'theme-ink': '--ink',
   'theme-accent': '--gold-dark',
 };
@@ -262,11 +297,9 @@ function setupKeyboard() {
 // ---------------------------------------------------------------------
 // Term rows
 // ---------------------------------------------------------------------
-function refreshTermRowColors() {
+function refreshTermRowState() {
   const rows = document.querySelectorAll('.term-row');
-  rows.forEach((row, i) => {
-    const swatch = row.querySelector('.swatch');
-    swatch.style.background = colorForIndex(i);
+  rows.forEach((row) => {
     const removeBtn = row.querySelector('.remove-term');
     removeBtn.disabled = rows.length <= 1;
   });
@@ -282,8 +315,12 @@ function addTermRow(prefillValue, label) {
   const row = document.createElement('div');
   row.className = 'term-row';
 
-  const swatch = document.createElement('span');
-  swatch.className = 'swatch';
+  const swatch = document.createElement('input');
+  swatch.type = 'color';
+  swatch.className = 'swatch term-color';
+  swatch.value = colorForIndex(rows.length);
+  swatch.title = 'Line color for this word';
+  swatch.setAttribute('aria-label', 'Line color for this word');
 
   const input = document.createElement('input');
   input.type = 'text';
@@ -306,14 +343,14 @@ function addTermRow(prefillValue, label) {
   removeBtn.textContent = '✕';
   removeBtn.addEventListener('click', () => {
     row.remove();
-    refreshTermRowColors();
+    refreshTermRowState();
   });
 
   row.appendChild(swatch);
   row.appendChild(input);
   row.appendChild(removeBtn);
   container.appendChild(row);
-  refreshTermRowColors();
+  refreshTermRowState();
   if (!activeInput) activeInput = input;
   return input;
 }
@@ -446,9 +483,16 @@ function setupTranslation() {
 // Search
 // ---------------------------------------------------------------------
 async function onSearch() {
-  const termInputs = Array.from(document.querySelectorAll('.heb-input'));
-  const entries = termInputs
-    .map((input) => ({ term: input.value.trim(), label: input.dataset.label }))
+  const rows = Array.from(document.querySelectorAll('.term-row'));
+  const entries = rows
+    .map((row) => {
+      const input = row.querySelector('.heb-input');
+      return {
+        term: input.value.trim(),
+        label: input.dataset.label,
+        color: row.querySelector('.term-color').value,
+      };
+    })
     .filter((e) => e.term);
 
   if (entries.length === 0) {
@@ -487,11 +531,10 @@ async function onSearch() {
   const t0 = performance.now();
   const allResults = [];
   for (let ti = 0; ti < entries.length; ti++) {
-    const { term, label } = entries[ti];
+    const { term, label, color } = entries[ti];
     const matches = searchELS(term, minSkip, maxSkip, range, 1000);
     matches.sort((a, b) => Math.abs(a.skip) - Math.abs(b.skip) || a.start - b.start);
-    const color = colorForIndex(ti);
-    matches.forEach((m) => { m.color = color; m.term = term; m.label = label; m.termIndex = ti; });
+    matches.forEach((m) => { m.term = term; m.label = label; m.termIndex = ti; });
     allResults.push({ term, label, color, matches, opacity: 1 });
     await new Promise((r) => setTimeout(r, 0));
   }
@@ -623,11 +666,12 @@ function renderGrid() {
   const highlightMap = new Map(); // idx -> Map(termIndex -> color)
   const linePaths = []; // { color, label, points: [[x, y], ...], termIndex }
   for (const m of state.flatMatches) {
+    const color = state.allResults[m.termIndex].color;
     const pts = [];
     for (const idx of m.indices) {
       if (idx >= topLeftIdx && idx <= bottomRightIdx) {
         if (!highlightMap.has(idx)) highlightMap.set(idx, new Map());
-        highlightMap.get(idx).set(m.termIndex, m.color);
+        highlightMap.get(idx).set(m.termIndex, color);
 
         const rel = idx - topLeftIdx;
         const r = Math.floor(rel / cols);
@@ -635,7 +679,7 @@ function renderGrid() {
         pts.push([cols - c - 0.5, r + 0.5]); // RTL columns: 0 is rightmost
       }
     }
-    if (pts.length >= 2) linePaths.push({ color: m.color, label: m.label, points: pts, termIndex: m.termIndex });
+    if (pts.length >= 2) linePaths.push({ color, label: m.label, points: pts, termIndex: m.termIndex });
   }
 
   const table = document.createElement('table');
@@ -759,7 +803,17 @@ function applyLineOpacity(termIndex, opacity) {
   });
 }
 
-function updateCellOpacity(termIndex) {
+// Recolors a term's line, start marker, and label in the current grid view.
+function applyLineColor(termIndex, color) {
+  document.querySelectorAll(`.els-line[data-term-index="${termIndex}"]`).forEach((el) => {
+    el.setAttribute('stroke', color);
+  });
+  document.querySelectorAll(`.els-line-start[data-term-index="${termIndex}"], .els-line-label[data-term-index="${termIndex}"]`).forEach((el) => {
+    el.setAttribute('fill', color);
+  });
+}
+
+function refreshCellsForTerm(termIndex) {
   document.querySelectorAll('.els-grid td.hl').forEach((td) => {
     const terms = (td.dataset.terms || '').split(',').filter(Boolean).map(Number);
     if (!terms.includes(termIndex)) return;
@@ -784,9 +838,17 @@ function renderLayerControls() {
     const chip = document.createElement('div');
     chip.className = 'layer-chip';
 
-    const swatch = document.createElement('span');
-    swatch.className = 'swatch';
-    swatch.style.background = r.color;
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'swatch layer-color';
+    colorInput.value = r.color;
+    colorInput.title = `${r.label || r.term} line color`;
+    colorInput.setAttribute('aria-label', `${r.label || r.term} line color`);
+    colorInput.addEventListener('input', () => {
+      r.color = colorInput.value;
+      applyLineColor(i, r.color);
+      refreshCellsForTerm(i);
+    });
 
     const label = document.createElement('span');
     label.className = 'layer-label';
@@ -803,10 +865,10 @@ function renderLayerControls() {
       const opacity = clamp(parseInt(slider.value, 10), 0, 100) / 100;
       r.opacity = opacity;
       applyLineOpacity(i, opacity);
-      updateCellOpacity(i);
+      refreshCellsForTerm(i);
     });
 
-    chip.appendChild(swatch);
+    chip.appendChild(colorInput);
     chip.appendChild(label);
     chip.appendChild(slider);
     container.appendChild(chip);
@@ -910,7 +972,8 @@ function findOverlapView() {
 async function init() {
   setupLayout();
   setupDrawers();
-  setupHoverReveal();
+  setupZoom();
+  setupFullscreen();
   setupTheme();
   setupKeyboard();
   setupTermRows();

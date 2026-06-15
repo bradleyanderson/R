@@ -7,7 +7,7 @@
   <meta name="description" content="Search the Hebrew text of the Torah for hidden equidistant letter sequences (ELS), the classic 'Bible Code' phenomenon, and visualize the results in a full-screen letter grid." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Cinzel:wght@600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -16,6 +16,12 @@
       <h1>📜 Bible Code Explorer</h1>
       <div id="layer-controls" class="layer-controls" hidden aria-label="Word opacity controls"></div>
       <div class="top-bar-actions">
+        <div class="zoom-controls" role="group" aria-label="Grid zoom">
+          <button type="button" id="zoom-out-btn" class="icon-btn icon-btn-sq" title="Zoom out" aria-label="Zoom out">−</button>
+          <span id="zoom-level" class="zoom-level">100%</span>
+          <button type="button" id="zoom-in-btn" class="icon-btn icon-btn-sq" title="Zoom in" aria-label="Zoom in">+</button>
+        </div>
+        <button type="button" id="fullscreen-btn" class="icon-btn icon-btn-sq" title="Toggle full screen" aria-label="Toggle full screen">⛶</button>
         <button type="button" id="toggle-theme-btn" class="icon-btn" title="Theme settings" aria-label="Theme settings">🎨 Theme</button>
         <button type="button" id="toggle-search-btn" class="icon-btn" title="Search words" aria-label="Search words">🔍 Search</button>
         <button type="button" id="toggle-results-btn" class="icon-btn" title="Results" aria-label="Results">📋 Results</button>
@@ -57,6 +63,10 @@
         <label class="color-row">
           Panels &amp; drawers
           <input type="color" id="theme-panel" />
+        </label>
+        <label class="color-row">
+          Grid background
+          <input type="color" id="theme-grid-bg" />
         </label>
         <label class="color-row">
           Text
@@ -170,10 +180,6 @@
       </div>
     </section>
 
-    <!-- Hover near a screen edge to pop the matching drawer out -->
-    <div id="hover-zone-left" class="hover-zone hover-zone-left" aria-hidden="true"></div>
-    <div id="hover-zone-right" class="hover-zone hover-zone-right" aria-hidden="true"></div>
-    <div id="hover-zone-bottom" class="hover-zone hover-zone-bottom" aria-hidden="true"></div>
   </div>
 
   <script src="js/els.js"></script>
