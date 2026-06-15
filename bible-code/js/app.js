@@ -24,6 +24,7 @@ const state = {
   flatMatches: [],  // every match across all terms
   currentCenter: undefined,
   favorites: [],    // pinned matches, persisted to localStorage
+  gridHistory: [],  // recently viewed grids, persisted to localStorage
 };
 
 function clamp(v, lo, hi) {
@@ -213,6 +214,8 @@ const THEME_VARS = {
   'theme-ink': '--ink',
   'theme-accent': '--gold-dark',
   'theme-slider': '--slider-accent',
+  'theme-btn-bg': '--btn-bg',
+  'theme-btn-text': '--btn-text',
 };
 const THEME_STORAGE_KEY = 'bibleCodeTheme';
 
@@ -620,7 +623,10 @@ function renderResults(allResults, minSkip, maxSkip) {
         viewBtn.type = 'button';
         viewBtn.className = 'view-btn';
         viewBtn.textContent = 'View grid';
-        viewBtn.addEventListener('click', () => showGrid(m));
+        viewBtn.addEventListener('click', () => {
+          showGrid(m, r.color);
+          closeDrawer('results-drawer');
+        });
 
         const pinBtn = document.createElement('button');
         pinBtn.type = 'button';
@@ -675,13 +681,14 @@ function clearGrid() {
   clearCrosswordResults();
 }
 
-function showGrid(match) {
+function showGrid(match, color) {
   const center = centerOfMatch(match);
   const suggested = clamp(Math.abs(match.skip) || 10, 5, 80);
   document.getElementById('grid-width').value = suggested;
   document.getElementById('grid-height').value = suggested;
   state.currentCenter = center;
   renderGrid();
+  addGridHistory(match, color);
 }
 
 function renderGrid() {
@@ -1205,7 +1212,8 @@ function runCrosswordSearch() {
   const shown = found.slice(0, 24);
 
   const svg = document.querySelector('.els-lines');
-  for (const { cells } of shown) {
+  const userLang = getUserLang();
+  shown.forEach(({ word, cells }) => {
     const points = [];
     for (const cell of cells) {
       const rel = cell.idx - topLeftIdx;
@@ -1219,10 +1227,26 @@ function runCrosswordSearch() {
     line.setAttribute('points', points.map((p) => p.join(',')).join(' '));
     line.setAttribute('class', 'els-line-cross');
     svg.appendChild(line);
-  }
 
-  const userLang = getUserLang();
-  shown.forEach(({ word, cells }) => {
+    // Translated word + gematria label, drawn along the dotted line.
+    const mid = points[Math.floor(points.length / 2)];
+    const [x1, y1] = points[0];
+    const [x2, y2] = points[points.length - 1];
+    let angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+    if (angle > 90) angle -= 180;
+    if (angle < -90) angle += 180;
+
+    const text = document.createElementNS(SVG_NS, 'text');
+    text.setAttribute('x', mid[0]);
+    text.setAttribute('y', mid[1]);
+    text.setAttribute('font-size', '0.32');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'central');
+    text.setAttribute('transform', `rotate(${angle.toFixed(1)} ${mid[0]} ${mid[1]})`);
+    text.setAttribute('class', 'els-line-cross-label');
+    text.textContent = `${word} (${gematriaValue(word)})`;
+    svg.appendChild(text);
+
     const chip = document.createElement('span');
     chip.className = 'preset';
     chip.title = refForIndex(cells[0].idx);
@@ -1230,7 +1254,9 @@ function runCrosswordSearch() {
     resultsEl.appendChild(chip);
 
     translateHebrewWord(word, userLang).then((translated) => {
-      if (translated) chip.textContent = `${word} (${gematriaValue(word)}) — ${translated}`;
+      if (!translated) return;
+      chip.textContent = `${word} (${gematriaValue(word)}) — ${translated}`;
+      text.textContent = `${translated} (${gematriaValue(word)})`;
     });
   });
 
@@ -1300,7 +1326,7 @@ function removeFavoriteAt(index) {
 }
 
 function viewFavorite(fav) {
-  showGrid(fav);
+  showGrid(fav, fav.color);
   closeDrawer('favorites-drawer');
 }
 
@@ -1361,6 +1387,108 @@ function setupFavorites() {
 }
 
 // ---------------------------------------------------------------------
+// Grid history — every grid the user views is recorded here (most recent
+// first) so they can jump back to it later, persisted to localStorage.
+// ---------------------------------------------------------------------
+const GRID_HISTORY_STORAGE_KEY = 'bibleCodeGridHistory';
+const MAX_GRID_HISTORY = 25;
+
+function loadGridHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GRID_HISTORY_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveGridHistory() {
+  try {
+    localStorage.setItem(GRID_HISTORY_STORAGE_KEY, JSON.stringify(state.gridHistory));
+  } catch (err) {
+    // Storage unavailable (e.g. private browsing) — history just won't persist.
+  }
+}
+
+function historyKey(entry) {
+  return `${entry.term}|${entry.skip}|${entry.start}`;
+}
+
+function addGridHistory(match, color) {
+  const entry = {
+    term: match.term,
+    label: match.label || match.term,
+    color,
+    skip: match.skip,
+    start: match.start,
+    indices: match.indices,
+    viewedAt: Date.now(),
+  };
+  state.gridHistory = state.gridHistory.filter((h) => historyKey(h) !== historyKey(entry));
+  state.gridHistory.unshift(entry);
+  if (state.gridHistory.length > MAX_GRID_HISTORY) state.gridHistory.length = MAX_GRID_HISTORY;
+  saveGridHistory();
+  renderGridHistory();
+}
+
+function clearGridHistory() {
+  state.gridHistory = [];
+  saveGridHistory();
+  renderGridHistory();
+}
+
+function renderGridHistory() {
+  const list = document.getElementById('history-list');
+  const countEl = document.getElementById('history-count');
+  const clearBtn = document.getElementById('clear-history-btn');
+  list.innerHTML = '';
+  countEl.textContent = state.gridHistory.length ? `(${state.gridHistory.length})` : '';
+  clearBtn.hidden = state.gridHistory.length === 0;
+
+  if (state.gridHistory.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = 'Grids you view will be listed here for quick access later.';
+    list.appendChild(p);
+    return;
+  }
+
+  state.gridHistory.forEach((entry) => {
+    const item = document.createElement('div');
+    item.className = 'favorite-item';
+
+    const label = document.createElement('span');
+    label.className = 'match-label';
+    const startRef = refForIndex(Math.min(...entry.indices));
+    const endRef = refForIndex(Math.max(...entry.indices));
+    const skipLabel = `${entry.skip > 0 ? '+' : ''}${entry.skip}`;
+    const rangeLabel = startRef === endRef
+      ? `skip ${skipLabel} — ${startRef}`
+      : `skip ${skipLabel} — ${startRef} → ${endRef}`;
+    label.textContent = `${entry.label || entry.term} — ${rangeLabel}`;
+
+    const viewBtn = document.createElement('button');
+    viewBtn.type = 'button';
+    viewBtn.className = 'view-btn';
+    viewBtn.textContent = 'View grid';
+    viewBtn.addEventListener('click', () => {
+      showGrid(entry, entry.color);
+      closeDrawer('search-drawer');
+    });
+
+    item.appendChild(label);
+    item.appendChild(viewBtn);
+    list.appendChild(item);
+  });
+}
+
+function setupGridHistory() {
+  state.gridHistory = loadGridHistory();
+  renderGridHistory();
+  document.getElementById('clear-history-btn').addEventListener('click', clearGridHistory);
+}
+
+// ---------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------
 async function init() {
@@ -1375,6 +1503,7 @@ async function init() {
   setupGematriaCalculator();
   setupCrossword();
   setupFavorites();
+  setupGridHistory();
   clearGrid();
 
   document.getElementById('grid-width').addEventListener('input', renderGrid);

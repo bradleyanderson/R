@@ -14,6 +14,8 @@
   --cell-zoom: 1;
   --line-thickness: 1;
   --slider-accent: #f2b441;
+  --btn-bg: transparent;
+  --btn-text: #8a93a3;
 }
 
 * {
@@ -83,11 +85,11 @@ body {
   font-family: var(--ui-font);
   font-size: 0.82rem;
   font-weight: 500;
-  background: transparent;
+  background: var(--btn-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.4rem 0.75rem;
-  color: var(--ink-light);
+  color: var(--btn-text);
   letter-spacing: 0.02em;
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease,
     box-shadow 0.15s ease, transform 0.1s ease;
@@ -699,7 +701,7 @@ button {
 
 .secondary {
   margin-top: 0.6rem;
-  background: transparent;
+  background: var(--btn-bg);
   border: 1px solid var(--border);
   color: var(--ink);
   border-radius: 6px;
@@ -942,8 +944,8 @@ button {
 
 .view-btn {
   border: 1px solid var(--border);
-  background: transparent;
-  color: var(--ink-light);
+  background: var(--btn-bg);
+  color: var(--btn-text);
   border-radius: 6px;
   padding: 0.2rem 0.6rem;
   font-family: var(--ui-font);
@@ -1120,4 +1122,57 @@ button {
   stroke: var(--grid-bg);
   stroke-width: 0.08;
   paint-order: stroke fill;
+}
+
+.els-line-cross-label {
+  font-family: var(--ui-font);
+  font-weight: 500;
+  fill: rgba(255, 255, 255, 0.75);
+  stroke: var(--grid-bg);
+  stroke-width: 0.06;
+  paint-order: stroke fill;
+}
+
+/* ---------------------------------------------------------------------
+   Touch & mobile
+   --------------------------------------------------------------------- */
+button {
+  touch-action: manipulation;
+}
+
+#grid-container,
+.drawer-body,
+.layer-controls,
+.layer-menu {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (pointer: coarse) {
+  .icon-btn,
+  .secondary,
+  .view-btn {
+    min-height: 2.75rem;
+  }
+
+  .icon-btn-sq,
+  .drawer-close,
+  .pin-btn,
+  .remove-term,
+  .layer-pin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  input[type="range"] {
+    height: 2rem;
+  }
+
+  .term-color,
+  .layer-color {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
 }

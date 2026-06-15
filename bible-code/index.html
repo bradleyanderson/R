@@ -91,6 +91,14 @@
           Sliders
           <input type="color" id="theme-slider" />
         </label>
+        <label class="color-row">
+          Buttons
+          <input type="color" id="theme-btn-bg" />
+        </label>
+        <label class="color-row">
+          Button text
+          <input type="color" id="theme-btn-text" />
+        </label>
         <button type="button" id="theme-reset" class="secondary">Reset to default</button>
       </div>
     </aside>
@@ -197,6 +205,13 @@
         </details>
         <p id="crossword-status" class="muted"></p>
         <div id="crossword-results" class="presets"></div>
+
+        <details class="about-details">
+          <summary>History <span id="history-count" class="muted"></span></summary>
+          <p class="muted">Grids you've viewed, most recent first — saved on this device.</p>
+          <div id="history-list"></div>
+          <button type="button" id="clear-history-btn" class="secondary">Clear history</button>
+        </details>
 
         <details class="about-details">
           <summary>About this tool</summary>
