@@ -25,6 +25,21 @@
       <h3>Quick examples</h3>
       <div id="presets" class="presets"></div>
 
+      <h3>Translate to Hebrew</h3>
+      <p class="muted">
+        Don't know the Hebrew spelling? Type a word or short phrase in any
+        language, translate it, then send the result to a search box above.
+      </p>
+      <div class="translate-row">
+        <input type="text" id="translate-input" class="translate-input" placeholder="e.g. light, lumière, 平和…" />
+        <button type="button" id="translate-btn" class="secondary">Translate</button>
+      </div>
+      <div class="translate-row">
+        <div id="translate-output" class="heb-output" dir="rtl" lang="he"></div>
+        <button type="button" id="use-translation-btn" class="secondary" disabled>Use this word</button>
+      </div>
+      <p id="translate-status" class="muted"></p>
+
       <h3>Hebrew keyboard</h3>
       <div id="keyboard" class="keyboard"></div>
 
@@ -79,8 +94,10 @@
       </div>
       <p class="muted">
         The grid reads right-to-left, top-to-bottom, like Hebrew text. Highlighted
-        letters show your search word(s) along their equidistant line. If two
-        words' letters land in the same view, both are highlighted — a "crossing".
+        letters show your search word(s) along their equidistant line, and a
+        colored line connects each occurrence from its first letter (marked with
+        a dot) to its last. If two words' letters land in the same view, both are
+        highlighted and connected — a "crossing".
       </p>
       <div id="grid-info" class="muted"></div>
       <div id="grid-container" class="grid-scroll"></div>

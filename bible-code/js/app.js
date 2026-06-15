@@ -187,6 +187,76 @@ function setupPresets() {
 }
 
 // ---------------------------------------------------------------------
+// Translation
+// ---------------------------------------------------------------------
+function setupTranslation() {
+  const input = document.getElementById('translate-input');
+  const btn = document.getElementById('translate-btn');
+  const output = document.getElementById('translate-output');
+  const useBtn = document.getElementById('use-translation-btn');
+  const status = document.getElementById('translate-status');
+
+  let lastHebrew = '';
+
+  async function doTranslate() {
+    const text = input.value.trim();
+    if (!text) {
+      status.textContent = 'Type a word or phrase first.';
+      return;
+    }
+
+    btn.disabled = true;
+    useBtn.disabled = true;
+    output.textContent = '';
+    lastHebrew = '';
+    status.textContent = 'Translating…';
+
+    try {
+      const url = 'https://translate.googleapis.com/translate_a/single'
+        + '?client=gtx&sl=auto&tl=iw&dt=t&q=' + encodeURIComponent(text);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const translated = (data[0] || []).map((seg) => seg[0]).join('');
+      const detected = data[2] ? ` (detected language: ${data[2]})` : '';
+
+      output.textContent = translated || '—';
+
+      const hebrewOnly = translated.replace(/[^א-ת]/g, '').slice(0, 12);
+      if (hebrewOnly.length >= 2) {
+        lastHebrew = hebrewOnly;
+        useBtn.disabled = false;
+        status.textContent = `Translated${detected}. Hebrew letters for searching: "${hebrewOnly}".`;
+      } else {
+        status.textContent = `Translated${detected}, but found fewer than 2 Hebrew letters in the result.`;
+      }
+    } catch (err) {
+      console.error(err);
+      status.textContent = 'Translation failed — check your internet connection and try again.';
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  btn.addEventListener('click', doTranslate);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      doTranslate();
+    }
+  });
+
+  useBtn.addEventListener('click', () => {
+    if (!lastHebrew) return;
+    const target = activeInput || document.querySelector('.heb-input');
+    if (target) {
+      target.value = lastHebrew;
+      target.focus();
+    }
+  });
+}
+
+// ---------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------
 async function onSearch() {
@@ -343,13 +413,21 @@ function renderGrid() {
   const bottomRightIdx = grid[rows - 1][cols - 1].idx;
 
   const highlightMap = new Map(); // idx -> Set of colors
+  const linePaths = []; // { color, points: [[x, y], ...] }
   for (const m of state.flatMatches) {
+    const pts = [];
     for (const idx of m.indices) {
       if (idx >= topLeftIdx && idx <= bottomRightIdx) {
         if (!highlightMap.has(idx)) highlightMap.set(idx, new Set());
         highlightMap.get(idx).add(m.color);
+
+        const rel = idx - topLeftIdx;
+        const r = Math.floor(rel / cols);
+        const c = rel % cols;
+        pts.push([cols - c - 0.5, r + 0.5]); // RTL columns: 0 is rightmost
       }
     }
+    if (pts.length >= 2) linePaths.push({ color: m.color, points: pts });
   }
 
   const table = document.createElement('table');
@@ -374,15 +452,55 @@ function renderGrid() {
     table.appendChild(tr);
   }
 
+  const wrap = document.createElement('div');
+  wrap.className = 'grid-wrap';
+  wrap.appendChild(table);
+  wrap.appendChild(buildLinesSVG(rows, cols, linePaths));
+
   const container = document.getElementById('grid-container');
   container.innerHTML = '';
-  container.appendChild(table);
+  container.appendChild(wrap);
 
   const firstIdx = clamp(topLeftIdx, 0, TorahData.text.length - 1);
   const lastIdx = clamp(bottomRightIdx, 0, TorahData.text.length - 1);
   document.getElementById('grid-info').textContent =
     `${rows}×${cols} grid — covers ${refForIndex(firstIdx)} … ${refForIndex(lastIdx)}. ` +
     `Highlighted cells show every searched word that falls inside this view, including ones that cross.`;
+}
+
+// Build an SVG overlay with one polyline + start marker per match,
+// connecting its letters from first to last in the grid's cell coordinates.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function buildLinesSVG(rows, cols, linePaths) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', 'els-lines');
+  svg.setAttribute('viewBox', `0 0 ${cols} ${rows}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  for (const { color, points } of linePaths) {
+    const pointsAttr = points.map((p) => p.join(',')).join(' ');
+
+    const halo = document.createElementNS(SVG_NS, 'polyline');
+    halo.setAttribute('points', pointsAttr);
+    halo.setAttribute('class', 'els-line-halo');
+    svg.appendChild(halo);
+
+    const line = document.createElementNS(SVG_NS, 'polyline');
+    line.setAttribute('points', pointsAttr);
+    line.setAttribute('class', 'els-line');
+    line.setAttribute('stroke', color);
+    svg.appendChild(line);
+
+    const start = document.createElementNS(SVG_NS, 'circle');
+    start.setAttribute('cx', points[0][0]);
+    start.setAttribute('cy', points[0][1]);
+    start.setAttribute('r', 0.16);
+    start.setAttribute('class', 'els-line-start');
+    start.setAttribute('fill', color);
+    svg.appendChild(start);
+  }
+
+  return svg;
 }
 
 // ---------------------------------------------------------------------
@@ -392,6 +510,7 @@ async function init() {
   setupKeyboard();
   setupTermRows();
   setupPresets();
+  setupTranslation();
 
   document.getElementById('search-btn').addEventListener('click', onSearch);
   document.getElementById('grid-width').addEventListener('input', renderGrid);
