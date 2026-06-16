@@ -1593,12 +1593,10 @@ function setupGridWordsMenu() {
 // ---------------------------------------------------------------------
 function addOverlayMatch(match, color, label) {
   state.overlayMatches.push({ match, color, label: label || match.label || match.term });
-  if (state.currentCenter === undefined) {
-    // No grid shown yet — open it centered on this match
-    showGrid(match, color);
-  } else {
-    renderGrid();
-  }
+  // Re-center on the overlay match so its letters fall within the grid bounds
+  state.currentCenter = centerOfMatch(match);
+  renderGrid();
+  document.getElementById('grid-view-btn').hidden = false;
   renderGridViewMenu();
 }
 
