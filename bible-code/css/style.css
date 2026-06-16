@@ -16,6 +16,8 @@
   --slider-accent: #f2b441;
   --btn-bg: transparent;
   --btn-text: #8a93a3;
+  --btn-active-bg: #f2b441;
+  --btn-active-text: #10131a;
 }
 
 * {
@@ -97,10 +99,10 @@ body {
 
 .icon-btn:hover,
 .icon-btn.active {
-  background: var(--gold);
-  color: var(--on-accent);
-  border-color: var(--gold);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--gold) 55%, transparent);
+  background: var(--btn-active-bg);
+  color: var(--btn-active-text);
+  border-color: var(--btn-active-bg);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--btn-active-bg) 55%, transparent);
 }
 
 .icon-btn:active {
@@ -302,6 +304,7 @@ body {
   min-height: 0;
   padding: 0.6rem 1rem;
   gap: 0.4rem;
+  position: relative;
 }
 
 #grid-toolbar {
@@ -1110,9 +1113,9 @@ button {
 
 .els-line-cross {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.45);
-  stroke-width: calc(0.07 * var(--line-thickness));
-  stroke-dasharray: 0.15 0.12;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: calc(0.08 * var(--line-thickness));
+  stroke-dasharray: 0.18 0.12;
   stroke-linecap: round;
 }
 
@@ -1176,3 +1179,304 @@ button {
     height: 2.2rem;
   }
 }
+
+/* ---------------------------------------------------------------------
+   Collapsible sections in search drawer
+   --------------------------------------------------------------------- */
+.section-details {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.section-details:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.section-details > summary {
+  cursor: pointer;
+  font-family: var(--ui-font);
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--ink-light);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.3rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  list-style: none;
+  user-select: none;
+}
+
+.section-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.section-details > summary::before {
+  content: '▶';
+  font-size: 0.6rem;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.section-details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.section-details > summary:hover {
+  color: var(--ink);
+}
+
+/* indent content inside collapsible section */
+.section-details > *:not(summary) {
+  margin-left: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Grid Words menu & Grid View menu (toolbar dropdowns)
+   --------------------------------------------------------------------- */
+.grid-words-wrap,
+.grid-view-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.grid-view-menu {
+  min-width: 200px;
+}
+
+.grid-view-menu .grid-view-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  font-size: 0.85rem;
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+
+.grid-view-menu .grid-view-option:hover {
+  background: color-mix(in srgb, var(--gold) 14%, var(--parchment-dark));
+}
+
+.grid-view-menu .grid-view-option.active-mode {
+  border-color: var(--btn-active-bg);
+  color: var(--btn-active-bg);
+}
+
+.grid-words-master {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.4rem;
+}
+
+.grid-words-master label {
+  font-size: 0.72rem;
+  color: var(--ink-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+.grid-words-master input[type="range"] {
+  flex: 1;
+  accent-color: var(--slider-accent);
+}
+
+.overlay-list {
+  padding: 0.4rem 0.6rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.4rem;
+}
+
+.overlay-list-title {
+  font-size: 0.72rem;
+  color: var(--ink-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.3rem;
+}
+
+.overlay-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0;
+  font-size: 0.82rem;
+}
+
+.overlay-item-swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
+.overlay-item-label {
+  flex: 1;
+  font-family: var(--heb-font);
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-item-remove {
+  border: none;
+  background: transparent;
+  color: var(--ink-light);
+  font-size: 0.9rem;
+  padding: 0.1rem 0.25rem;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.overlay-item-remove:hover {
+  color: var(--ink);
+}
+
+/* Side-by-side grid layout */
+.grid-side-by-side {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  align-items: flex-start;
+  padding: 0.5rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.grid-side-by-side .grid-wrap {
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Download button (fixed, bottom-left)
+   --------------------------------------------------------------------- */
+.download-btn {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 55;
+  background: color-mix(in srgb, var(--parchment-dark) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink-light);
+  font-family: var(--ui-font);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.45rem 0.85rem;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.download-btn:hover {
+  background: var(--btn-active-bg);
+  color: var(--btn-active-text);
+  border-color: var(--btn-active-bg);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--btn-active-bg) 40%, transparent);
+}
+
+/* ---------------------------------------------------------------------
+   Pie chart widget (floating, top-left of grid stage)
+   --------------------------------------------------------------------- */
+.pie-wrap {
+  position: absolute;
+  top: 3.4rem;
+  left: 0.75rem;
+  z-index: 45;
+  background: color-mix(in srgb, var(--parchment-dark) 92%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem 0.6rem 0.6rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 160px;
+}
+
+#pie-canvas {
+  display: block;
+}
+
+.pie-legend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+.pie-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--ink-light);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.pie-legend-swatch {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pie-legend-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pie-close {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.4rem;
+  border: none;
+  background: transparent;
+  color: var(--ink-light);
+  font-size: 0.85rem;
+  padding: 0.15rem 0.3rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.pie-close:hover {
+  color: var(--ink);
+}
+
+/* pie chart toggle button in results drawer header */
+.drawer-header .icon-btn-sq {
+  border: 1px solid var(--border);
+  color: var(--ink-light);
+  background: transparent;
+  font-size: 1rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.drawer-header .icon-btn-sq:hover {
+  background: var(--btn-active-bg);
+  color: var(--btn-active-text);
+  border-color: var(--btn-active-bg);
+}
+

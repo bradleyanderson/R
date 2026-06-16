@@ -20,11 +20,14 @@ function colorForIndex(i) {
 }
 
 const state = {
-  allResults: [],   // [{ term, label, color, matches }]
-  flatMatches: [],  // every match across all terms
+  allResults: [],       // [{ term, label, color, matches }]
+  flatMatches: [],      // every match across all terms
   currentCenter: undefined,
-  favorites: [],    // pinned matches, persisted to localStorage
-  gridHistory: [],  // recently viewed grids, persisted to localStorage
+  favorites: [],        // pinned matches, persisted to localStorage
+  gridHistory: [],      // recently viewed grids, persisted to localStorage
+  overlayMatches: [],   // [{match, color, label}] accumulated for multi-grid overlay
+  crosswordWords: [],   // [{word, color, opacity, cells}] from open search
+  gridViewMode: 'overlay', // 'overlay' | 'side-by-side'
 };
 
 function clamp(v, lo, hi) {
@@ -122,6 +125,68 @@ function setupDrawers() {
   openDrawer('search-drawer');
 }
 
+// ---------------------------------------------------------------------
+// Swipe gestures — close drawers by swiping, open from edges
+// ---------------------------------------------------------------------
+function setupSwipeDrawers() {
+  const DIST = 52, VEL = 0.22;
+
+  function addSwipe(el, onEnd) {
+    let sx, sy, st;
+    el.addEventListener('touchstart', (e) => {
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+    }, { passive: true });
+    el.addEventListener('touchend', (e) => {
+      if (sx == null) return;
+      const dx = e.changedTouches[0].clientX - sx;
+      const dy = e.changedTouches[0].clientY - sy;
+      const dt = Math.max(1, Date.now() - st);
+      sx = sy = st = null;
+      onEnd(dx, dy, dt);
+    }, { passive: true });
+  }
+
+  function isSwipe(delta, perp, dt) {
+    if (Math.abs(perp) > Math.abs(delta)) return false;
+    return Math.abs(delta) > DIST || Math.abs(delta) / dt > VEL;
+  }
+
+  // Left drawer: swipe left to close
+  addSwipe(document.getElementById('theme-drawer'), (dx, dy, dt) => {
+    if (isSwipe(dx, dy, dt) && dx < 0) closeDrawer('theme-drawer');
+  });
+
+  // Right drawers: swipe right to close
+  ['results-drawer', 'favorites-drawer'].forEach((id) => {
+    addSwipe(document.getElementById(id), (dx, dy, dt) => {
+      if (isSwipe(dx, dy, dt) && dx > 0) closeDrawer(id);
+    });
+  });
+
+  // Bottom drawer: swipe down to close, swipe up on the handle to open
+  addSwipe(document.getElementById('search-drawer'), (dx, dy, dt) => {
+    if (isSwipe(dy, dx, dt) && dy > 0) closeDrawer('search-drawer');
+  });
+
+  // Grid stage: edge swipes to open side drawers
+  let ex, ey, et;
+  const stage = document.getElementById('grid-stage');
+  stage.addEventListener('touchstart', (e) => {
+    ex = e.touches[0].clientX; ey = e.touches[0].clientY; et = Date.now();
+  }, { passive: true });
+  stage.addEventListener('touchend', (e) => {
+    if (ex == null) return;
+    const dx = e.changedTouches[0].clientX - ex;
+    const dy = e.changedTouches[0].clientY - ey;
+    const dt = Math.max(1, Date.now() - et);
+    const startX = ex;
+    ex = ey = et = null;
+    if (!isSwipe(dx, dy, dt)) return;
+    if (dx > 0 && startX < 32) openDrawer('theme-drawer');
+    if (dx < 0 && startX > window.innerWidth - 32) openDrawer('results-drawer');
+  }, { passive: true });
+}
+
 // Measure the top bar's real height (it wraps onto two lines on narrow
 // screens) so the side drawers can start below it instead of covering it.
 function setupLayout() {
@@ -216,6 +281,7 @@ const THEME_VARS = {
   'theme-slider': '--slider-accent',
   'theme-btn-bg': '--btn-bg',
   'theme-btn-text': '--btn-text',
+  'theme-btn-active': '--btn-active-bg',
 };
 const THEME_STORAGE_KEY = 'bibleCodeTheme';
 
@@ -528,6 +594,7 @@ async function onSearch(opts = {}) {
 
   document.getElementById('results').innerHTML = '';
   document.getElementById('overlap-status').textContent = '';
+  state.overlayMatches = [];
   clearGrid();
 
   setStatus('Looking up word labels…');
@@ -564,6 +631,7 @@ async function onSearch(opts = {}) {
   );
 
   openDrawer('results-drawer');
+  updatePieChart();
 }
 
 function renderResults(allResults, minSkip, maxSkip) {
@@ -628,6 +696,16 @@ function renderResults(allResults, minSkip, maxSkip) {
           closeDrawer('results-drawer');
         });
 
+        const overlayBtn = document.createElement('button');
+        overlayBtn.type = 'button';
+        overlayBtn.className = 'view-btn';
+        overlayBtn.textContent = '＋ Overlay';
+        overlayBtn.title = 'Add this result to the grid overlay';
+        overlayBtn.addEventListener('click', () => {
+          addOverlayMatch(m, r.color, r.label || r.term);
+          closeDrawer('results-drawer');
+        });
+
         const pinBtn = document.createElement('button');
         pinBtn.type = 'button';
         pinBtn.className = 'pin-btn';
@@ -650,6 +728,7 @@ function renderResults(allResults, minSkip, maxSkip) {
         const actions = document.createElement('div');
         actions.className = 'match-actions';
         actions.appendChild(viewBtn);
+        actions.appendChild(overlayBtn);
         actions.appendChild(pinBtn);
 
         item.appendChild(label);
@@ -675,10 +754,13 @@ function renderResults(allResults, minSkip, maxSkip) {
 // ---------------------------------------------------------------------
 function clearGrid() {
   state.currentCenter = undefined;
+  document.getElementById('grid-container').className = 'grid-scroll';
   document.getElementById('grid-container').innerHTML =
     '<p class="muted" id="grid-placeholder">Open "Search" below, run a search, then choose "View grid" on a result to explore the letter grid here.</p>';
   document.getElementById('grid-info').textContent = '';
+  document.getElementById('download-grid-btn').hidden = true;
   clearCrosswordResults();
+  clearGridWordsMenu();
 }
 
 function showGrid(match, color) {
@@ -689,37 +771,53 @@ function showGrid(match, color) {
   state.currentCenter = center;
   renderGrid();
   addGridHistory(match, color);
+  document.getElementById('grid-view-btn').hidden = false;
+  renderGridViewMenu();
 }
 
-function renderGrid() {
-  if (state.currentCenter === undefined) return;
-  clearCrosswordResults();
-  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
-  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
-  document.getElementById('grid-width').value = cols;
-  document.getElementById('grid-height').value = rows;
-
-  const grid = buildGrid(state.currentCenter, rows, cols);
+function buildSingleGrid(center, rows, cols, allMatches, viewState) {
+  const grid = buildGrid(center, rows, cols);
   const topLeftIdx = grid[0][0].idx;
   const bottomRightIdx = grid[rows - 1][cols - 1].idx;
 
-  const highlightMap = new Map(); // idx -> Map(termIndex -> color)
-  const linePaths = []; // { color, label, points: [[x, y], ...], termIndex }
-  for (const m of state.flatMatches) {
-    const color = state.allResults[m.termIndex].color;
+  const highlightMap = new Map();
+  const linePaths = [];
+
+  // ELS matches from search results
+  for (const m of allMatches) {
+    const ri = viewState ? viewState.allResults[m.termIndex] : state.allResults[m.termIndex];
+    if (!ri) continue;
+    const color = ri.color;
     const pts = [];
     for (const idx of m.indices) {
       if (idx >= topLeftIdx && idx <= bottomRightIdx) {
         if (!highlightMap.has(idx)) highlightMap.set(idx, new Map());
         highlightMap.get(idx).set(m.termIndex, color);
-
         const rel = idx - topLeftIdx;
         const r = Math.floor(rel / cols);
         const c = rel % cols;
-        pts.push([cols - c - 0.5, r + 0.5]); // RTL columns: 0 is rightmost
+        pts.push([cols - c - 0.5, r + 0.5]);
       }
     }
     if (pts.length >= 2) linePaths.push({ color, label: m.label, points: pts, termIndex: m.termIndex });
+  }
+
+  // Extra overlay matches (from state.overlayMatches)
+  for (let oi = 0; oi < state.overlayMatches.length; oi++) {
+    const { match: om, color, label } = state.overlayMatches[oi];
+    const pts = [];
+    for (const idx of om.indices) {
+      if (idx >= topLeftIdx && idx <= bottomRightIdx) {
+        const syntheticTi = 1000 + oi;
+        if (!highlightMap.has(idx)) highlightMap.set(idx, new Map());
+        highlightMap.get(idx).set(syntheticTi, color);
+        const rel = idx - topLeftIdx;
+        const r = Math.floor(rel / cols);
+        const c = rel % cols;
+        pts.push([cols - c - 0.5, r + 0.5]);
+      }
+    }
+    if (pts.length >= 2) linePaths.push({ color, label, points: pts, termIndex: 1000 + oi });
   }
 
   const table = document.createElement('table');
@@ -731,15 +829,12 @@ function renderGrid() {
       if (cell.char) {
         const content = document.createElement('div');
         content.className = 'cell-content';
-
         const letter = document.createElement('span');
         letter.className = 'cell-letter';
         letter.textContent = cell.char;
-
         const num = document.createElement('span');
         num.className = 'cell-num';
         num.textContent = String(letterValue(cell.char));
-
         content.appendChild(letter);
         content.appendChild(num);
         td.appendChild(content);
@@ -749,27 +844,124 @@ function renderGrid() {
         const entries = Array.from(highlightMap.get(cell.idx).entries());
         td.classList.add('hl');
         td.dataset.terms = entries.map(([ti]) => ti).join(',');
-        applyCellBackground(td, entries);
+        // For overlay cells we manually mix colors
+        const layers = entries.map(([ti, c]) => {
+          const opacity = (ti < 1000 && state.allResults[ti]) ? (state.allResults[ti].opacity ?? 1) : 1;
+          return colorWithOpacity(c, opacity);
+        });
+        td.style.background = layers.length === 1 ? layers[0] : `linear-gradient(135deg, ${layers.join(', ')})`;
       }
       tr.appendChild(td);
     }
     table.appendChild(tr);
   }
 
+  // Build SVG for ELS lines (pass only real term lines; overlay lines use special handling below)
+  const realLinePaths = linePaths.filter((lp) => lp.termIndex < 1000);
+  const overlayLinePaths = linePaths.filter((lp) => lp.termIndex >= 1000);
+
+  const svg = buildLinesSVG(rows, cols, realLinePaths);
+
+  // Draw overlay lines as dashed with slightly different style
+  for (const { color, label, points } of overlayLinePaths) {
+    const pointsAttr = points.map((p) => p.join(',')).join(' ');
+    const halo = document.createElementNS(SVG_NS, 'polyline');
+    halo.setAttribute('points', pointsAttr);
+    halo.setAttribute('class', 'els-line-halo');
+    svg.appendChild(halo);
+    const line = document.createElementNS(SVG_NS, 'polyline');
+    line.setAttribute('points', pointsAttr);
+    line.setAttribute('class', 'els-line');
+    line.setAttribute('stroke', color);
+    line.style.strokeDasharray = '0.25 0.1';
+    svg.appendChild(line);
+    if (label) {
+      const mid = points[Math.floor(points.length / 2)];
+      const [x1, y1] = points[0];
+      const [x2, y2] = points[points.length - 1];
+      let angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+      if (angle > 90) angle -= 180;
+      if (angle < -90) angle += 180;
+      const text = document.createElementNS(SVG_NS, 'text');
+      text.setAttribute('x', mid[0]);
+      text.setAttribute('y', mid[1]);
+      text.setAttribute('font-size', '0.4');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
+      text.setAttribute('transform', `rotate(${angle.toFixed(1)} ${mid[0]} ${mid[1]})`);
+      text.setAttribute('class', 'els-line-label');
+      text.setAttribute('fill', color);
+      text.textContent = label;
+      svg.appendChild(text);
+    }
+  }
+
   const wrap = document.createElement('div');
   wrap.className = 'grid-wrap';
   wrap.appendChild(table);
-  wrap.appendChild(buildLinesSVG(rows, cols, linePaths));
+  wrap.appendChild(svg);
+  return { wrap, topLeftIdx, bottomRightIdx };
+}
+
+function renderGrid() {
+  if (state.currentCenter === undefined) return;
+  clearCrosswordResults();
+  clearGridWordsMenu();
+  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
+  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
+  document.getElementById('grid-width').value = cols;
+  document.getElementById('grid-height').value = rows;
 
   const container = document.getElementById('grid-container');
   container.innerHTML = '';
-  container.appendChild(wrap);
+  container.className = 'grid-scroll';
 
-  const firstIdx = clamp(topLeftIdx, 0, TorahData.text.length - 1);
-  const lastIdx = clamp(bottomRightIdx, 0, TorahData.text.length - 1);
-  document.getElementById('grid-info').textContent =
-    `${rows}×${cols} grid — covers ${refForIndex(firstIdx)} … ${refForIndex(lastIdx)}. ` +
-    `Highlighted cells show every searched word that falls inside this view, including ones that cross.`;
+  if (state.gridViewMode === 'side-by-side' && state.overlayMatches.length > 0) {
+    // Side-by-side: show one grid per overlay match + primary
+    container.className = 'grid-side-by-side';
+    const allPanels = [
+      { center: state.currentCenter, matches: state.flatMatches, label: 'Primary' },
+      ...state.overlayMatches.map(({ match, label }) => ({
+        center: centerOfMatch(match),
+        matches: [...state.flatMatches, match],
+        label,
+      })),
+    ];
+    for (const panel of allPanels) {
+      const { wrap, topLeftIdx, bottomRightIdx } = buildSingleGrid(
+        panel.center, rows, cols, panel.matches, null
+      );
+      const panelDiv = document.createElement('div');
+      panelDiv.style.display = 'flex';
+      panelDiv.style.flexDirection = 'column';
+      panelDiv.style.alignItems = 'center';
+      panelDiv.style.gap = '0.25rem';
+      const lbl = document.createElement('div');
+      lbl.textContent = panel.label;
+      lbl.style.fontSize = '0.72rem';
+      lbl.style.color = 'var(--ink-light)';
+      panelDiv.appendChild(lbl);
+      panelDiv.appendChild(wrap);
+      container.appendChild(panelDiv);
+    }
+    document.getElementById('grid-info').textContent =
+      `Side-by-side: ${allPanels.length} grid(s), ${rows}×${cols} each.`;
+  } else {
+    // Overlay mode (default): single grid showing everything
+    const { wrap, topLeftIdx, bottomRightIdx } = buildSingleGrid(
+      state.currentCenter, rows, cols, state.flatMatches, null
+    );
+    container.appendChild(wrap);
+    const firstIdx = clamp(topLeftIdx, 0, TorahData.text.length - 1);
+    const lastIdx = clamp(bottomRightIdx, 0, TorahData.text.length - 1);
+    document.getElementById('grid-info').textContent =
+      `${rows}×${cols} grid — covers ${refForIndex(firstIdx)} … ${refForIndex(lastIdx)}. ` +
+      `Highlighted cells show every searched word that falls inside this view, including ones that cross.`;
+  }
+
+  // Show download button when grid is visible
+  document.getElementById('download-grid-btn').hidden = false;
+  updatePieChart();
 }
 
 // Build an SVG overlay with one polyline + start marker + label per match,
@@ -1134,9 +1326,8 @@ function clearCrosswordResults() {
   document.getElementById('crossword-status').textContent = '';
 }
 
-// Scans the currently rendered grid for dictionary words crossing any cell
-// that belongs to one of the user's searched ELS lines, then outlines them
-// on the grid and lists them with their gematria values.
+// Scans every cell of the currently rendered grid for Hebrew dictionary words
+// in all 8 directions (regardless of whether they cross any ELS-tagged cell).
 function runCrosswordSearch() {
   const status = document.getElementById('crossword-status');
   const resultsEl = document.getElementById('crossword-results');
@@ -1152,22 +1343,9 @@ function runCrosswordSearch() {
   const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
   const grid = buildGrid(state.currentCenter, rows, cols);
   const topLeftIdx = grid[0][0].idx;
-  const bottomRightIdx = grid[rows - 1][cols - 1].idx;
-
-  const taggedCells = new Set();
-  for (const m of state.flatMatches) {
-    for (const idx of m.indices) {
-      if (idx >= topLeftIdx && idx <= bottomRightIdx) taggedCells.add(idx);
-    }
-  }
-
-  if (taggedCells.size === 0) {
-    status.textContent = 'None of your searched words appear in the current grid view.';
-    return;
-  }
 
   document.querySelectorAll('.els-grid td.cross').forEach((td) => td.classList.remove('cross'));
-  document.querySelectorAll('.els-line-cross').forEach((el) => el.remove());
+  document.querySelectorAll('.els-line-cross, .els-line-cross-label').forEach((el) => el.remove());
 
   const taggedTerms = new Set(state.allResults.map((r) => r.term));
   const found = [];
@@ -1190,13 +1368,12 @@ function runCrosswordSearch() {
             if (cell.char !== word[k]) { ok = false; break; }
             cells.push(cell);
           }
-          if (!ok || !cells.some((cell) => taggedCells.has(cell.idx))) continue;
+          if (!ok) continue;
 
           const key = cells.map((cell) => cell.idx).join(',');
           const revKey = cells.slice().reverse().map((cell) => cell.idx).join(',');
           if (seenKeys.has(key) || seenKeys.has(revKey)) continue;
           seenKeys.add(key);
-
           found.push({ word, cells });
         }
       }
@@ -1204,16 +1381,30 @@ function runCrosswordSearch() {
   }
 
   if (found.length === 0) {
-    status.textContent = 'No dictionary words found crossing your searched word(s) in this view.';
+    status.textContent = 'No Hebrew dictionary words found in this grid view.';
+    state.crosswordWords = [];
+    renderGridWordsMenu();
+    updatePieChart();
     return;
   }
 
   found.sort((a, b) => b.word.length - a.word.length);
-  const shown = found.slice(0, 24);
+  const shown = found.slice(0, 40);
+
+  // Assign a default color per word using existing palette
+  state.crosswordWords = shown.map((fw, i) => ({
+    word: fw.word,
+    cells: fw.cells,
+    color: colorForIndex(state.allResults.length + i),
+    opacity: 0.8,
+    translated: null,
+  }));
 
   const svg = document.querySelector('.els-lines');
   const userLang = getUserLang();
-  shown.forEach(({ word, cells }) => {
+
+  state.crosswordWords.forEach((cw, i) => {
+    const { word, cells } = cw;
     const points = [];
     for (const cell of cells) {
       const rel = cell.idx - topLeftIdx;
@@ -1223,12 +1414,15 @@ function runCrosswordSearch() {
       if (td) td.classList.add('cross');
       points.push([cols - c - 0.5, r + 0.5]);
     }
+
     const line = document.createElementNS(SVG_NS, 'polyline');
     line.setAttribute('points', points.map((p) => p.join(',')).join(' '));
     line.setAttribute('class', 'els-line-cross');
-    svg.appendChild(line);
+    line.setAttribute('stroke', cw.color);
+    line.style.opacity = cw.opacity;
+    line.dataset.cwIndex = String(i);
+    if (svg) svg.appendChild(line);
 
-    // Translated word + gematria label, drawn along the dotted line.
     const mid = points[Math.floor(points.length / 2)];
     const [x1, y1] = points[0];
     const [x2, y2] = points[points.length - 1];
@@ -1244,28 +1438,468 @@ function runCrosswordSearch() {
     text.setAttribute('dominant-baseline', 'central');
     text.setAttribute('transform', `rotate(${angle.toFixed(1)} ${mid[0]} ${mid[1]})`);
     text.setAttribute('class', 'els-line-cross-label');
+    text.setAttribute('fill', cw.color);
+    text.style.opacity = cw.opacity;
+    text.dataset.cwIndex = String(i);
     text.textContent = `${word} (${gematriaValue(word)})`;
-    svg.appendChild(text);
+    if (svg) svg.appendChild(text);
 
     const chip = document.createElement('span');
     chip.className = 'preset';
     chip.title = refForIndex(cells[0].idx);
     chip.textContent = `${word} (${gematriaValue(word)})`;
+    chip.style.borderColor = cw.color;
     resultsEl.appendChild(chip);
 
     translateHebrewWord(word, userLang).then((translated) => {
       if (!translated) return;
+      cw.translated = translated;
       chip.textContent = `${word} (${gematriaValue(word)}) — ${translated}`;
       text.textContent = `${translated} (${gematriaValue(word)})`;
     });
   });
 
-  const more = found.length > shown.length ? ` (showing top ${shown.length} by word length)` : '';
-  status.textContent = `Found ${found.length} crossing word(s)${more} — outlined on the grid.`;
+  const more = found.length > shown.length ? ` (showing top ${shown.length} of ${found.length} by word length)` : '';
+  status.textContent = `Found ${found.length} word(s)${more} in this grid.`;
+
+  renderGridWordsMenu();
+  updatePieChart();
 }
 
 function setupCrossword() {
   document.getElementById('crossword-btn').addEventListener('click', runCrosswordSearch);
+}
+
+// ---------------------------------------------------------------------
+// Grid Words dropdown — controls color/opacity of each crossword word
+// ---------------------------------------------------------------------
+function clearGridWordsMenu() {
+  state.crosswordWords = [];
+  const btn = document.getElementById('grid-words-btn');
+  btn.hidden = true;
+  btn.classList.remove('active');
+  document.getElementById('grid-words-menu').classList.remove('open');
+  document.getElementById('grid-words-menu').innerHTML = '';
+}
+
+function applyGridWordStyle(i) {
+  const cw = state.crosswordWords[i];
+  document.querySelectorAll(`[data-cw-index="${i}"]`).forEach((el) => {
+    el.style.opacity = cw.opacity;
+    if (el.tagName === 'polyline' || el.getAttribute('class') === 'els-line-cross') {
+      el.setAttribute('stroke', cw.color);
+    }
+    if (el.getAttribute('class') === 'els-line-cross-label') {
+      el.setAttribute('fill', cw.color);
+    }
+  });
+}
+
+function renderGridWordsMenu() {
+  const menu = document.getElementById('grid-words-menu');
+  const btn = document.getElementById('grid-words-btn');
+  menu.innerHTML = '';
+
+  if (state.crosswordWords.length === 0) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+
+  // Master opacity slider at the top
+  const masterWrap = document.createElement('div');
+  masterWrap.className = 'grid-words-master';
+  const masterLabel = document.createElement('label');
+  masterLabel.textContent = 'All';
+  const masterSlider = document.createElement('input');
+  masterSlider.type = 'range';
+  masterSlider.min = '0';
+  masterSlider.max = '100';
+  masterSlider.value = '80';
+  masterSlider.addEventListener('input', () => {
+    const op = parseInt(masterSlider.value, 10) / 100;
+    state.crosswordWords.forEach((cw, i) => {
+      cw.opacity = op;
+      applyGridWordStyle(i);
+    });
+    // sync individual sliders
+    menu.querySelectorAll('.cw-opacity-slider').forEach((sl) => { sl.value = masterSlider.value; });
+  });
+  masterWrap.appendChild(masterLabel);
+  masterWrap.appendChild(masterSlider);
+  menu.appendChild(masterWrap);
+
+  // One row per word
+  state.crosswordWords.forEach((cw, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'layer-chip';
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.className = 'swatch layer-color';
+    colorInput.value = cw.color;
+    colorInput.title = cw.word;
+    colorInput.addEventListener('input', () => {
+      cw.color = colorInput.value;
+      applyGridWordStyle(i);
+    });
+
+    const lbl = document.createElement('span');
+    lbl.className = 'layer-label';
+    lbl.textContent = cw.translated ? `${cw.word} — ${cw.translated}` : cw.word;
+    lbl.title = `${cw.word} (${gematriaValue(cw.word)})`;
+
+    const opSlider = document.createElement('input');
+    opSlider.type = 'range';
+    opSlider.min = '0';
+    opSlider.max = '100';
+    opSlider.value = String(Math.round(cw.opacity * 100));
+    opSlider.className = 'layer-opacity cw-opacity-slider';
+    opSlider.addEventListener('input', () => {
+      cw.opacity = parseInt(opSlider.value, 10) / 100;
+      applyGridWordStyle(i);
+    });
+
+    chip.appendChild(colorInput);
+    chip.appendChild(lbl);
+    chip.appendChild(opSlider);
+    menu.appendChild(chip);
+  });
+}
+
+function setupGridWordsMenu() {
+  const btn = document.getElementById('grid-words-btn');
+  const menu = document.getElementById('grid-words-menu');
+
+  btn.addEventListener('click', () => {
+    const open = menu.classList.toggle('open');
+    btn.classList.toggle('active', open);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('open')) return;
+    if (menu.contains(e.target) || btn.contains(e.target)) return;
+    if (!document.body.contains(e.target)) return;
+    menu.classList.remove('open');
+    btn.classList.remove('active');
+  });
+}
+
+// ---------------------------------------------------------------------
+// Grid View dropdown — overlay / side-by-side modes + overlay list
+// ---------------------------------------------------------------------
+function addOverlayMatch(match, color, label) {
+  state.overlayMatches.push({ match, color, label: label || match.label || match.term });
+  if (state.currentCenter === undefined) {
+    // No grid shown yet — open it centered on this match
+    showGrid(match, color);
+  } else {
+    renderGrid();
+  }
+  renderGridViewMenu();
+}
+
+function removeOverlayAt(index) {
+  state.overlayMatches.splice(index, 1);
+  if (state.currentCenter !== undefined) renderGrid();
+  renderGridViewMenu();
+}
+
+function clearOverlays() {
+  state.overlayMatches = [];
+  if (state.currentCenter !== undefined) renderGrid();
+  renderGridViewMenu();
+}
+
+function renderGridViewMenu() {
+  const menu = document.getElementById('grid-view-menu');
+  const btn = document.getElementById('grid-view-btn');
+  menu.innerHTML = '';
+
+  const hasGrid = state.currentCenter !== undefined;
+  btn.hidden = !hasGrid && state.overlayMatches.length === 0;
+
+  const modes = [
+    { key: 'overlay', icon: '⊞', label: 'Overlay (default)', desc: 'All results shown on one grid' },
+    { key: 'side-by-side', icon: '⊟', label: 'Side by side', desc: 'Each result in its own panel' },
+  ];
+
+  modes.forEach(({ key, icon, label, desc }) => {
+    const row = document.createElement('div');
+    row.className = `grid-view-option${state.gridViewMode === key ? ' active-mode' : ''}`;
+    row.title = desc;
+    row.innerHTML = `<span>${icon}</span><span>${label}</span>`;
+    row.addEventListener('click', () => {
+      state.gridViewMode = key;
+      if (state.currentCenter !== undefined) renderGrid();
+      renderGridViewMenu();
+      menu.classList.remove('open');
+      btn.classList.remove('active');
+    });
+    menu.appendChild(row);
+  });
+
+  if (state.overlayMatches.length > 0) {
+    const listDiv = document.createElement('div');
+    listDiv.className = 'overlay-list';
+    const title = document.createElement('div');
+    title.className = 'overlay-list-title';
+    title.textContent = `Overlaid grids (${state.overlayMatches.length})`;
+    listDiv.appendChild(title);
+
+    state.overlayMatches.forEach(({ color, label }, i) => {
+      const item = document.createElement('div');
+      item.className = 'overlay-item';
+      const swatch = document.createElement('div');
+      swatch.className = 'overlay-item-swatch';
+      swatch.style.background = color;
+      const lbl = document.createElement('div');
+      lbl.className = 'overlay-item-label';
+      lbl.textContent = label;
+      const rem = document.createElement('button');
+      rem.type = 'button';
+      rem.className = 'overlay-item-remove';
+      rem.textContent = '✕';
+      rem.title = 'Remove from overlay';
+      rem.addEventListener('click', (e) => { e.stopPropagation(); removeOverlayAt(i); });
+      item.appendChild(swatch);
+      item.appendChild(lbl);
+      item.appendChild(rem);
+      listDiv.appendChild(item);
+    });
+
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'secondary';
+    clearBtn.textContent = 'Clear all overlays';
+    clearBtn.style.marginTop = '0.4rem';
+    clearBtn.addEventListener('click', clearOverlays);
+    listDiv.appendChild(clearBtn);
+    menu.appendChild(listDiv);
+  }
+}
+
+function setupGridViewMenu() {
+  const btn = document.getElementById('grid-view-btn');
+  const menu = document.getElementById('grid-view-menu');
+
+  btn.addEventListener('click', () => {
+    renderGridViewMenu();
+    const open = menu.classList.toggle('open');
+    btn.classList.toggle('active', open);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('open')) return;
+    if (menu.contains(e.target) || btn.contains(e.target)) return;
+    if (!document.body.contains(e.target)) return;
+    menu.classList.remove('open');
+    btn.classList.remove('active');
+  });
+}
+
+// ---------------------------------------------------------------------
+// Download grid as JPG
+// ---------------------------------------------------------------------
+function downloadGridAsJPG() {
+  const wrap = document.querySelector('#grid-container .grid-wrap, #grid-container .grid-side-by-side');
+  if (!wrap) {
+    setStatus('No grid to download — view a grid first.');
+    return;
+  }
+  const table = wrap.querySelector('.els-grid') || document.querySelector('.els-grid');
+  if (!table) return;
+
+  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
+  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
+  const CELL = 56;
+  const W = cols * CELL;
+  const H = rows * CELL;
+  const BG = getComputedStyle(document.documentElement).getPropertyValue('--grid-bg').trim() || '#07090c';
+  const BORDER = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#262b33';
+  const INK_LIGHT = getComputedStyle(document.documentElement).getPropertyValue('--ink-light').trim() || '#8a93a3';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, H);
+
+  const allCells = table.querySelectorAll('td');
+  allCells.forEach((td, idx) => {
+    const r = Math.floor(idx / cols);
+    const c = idx % cols;
+    const x = c * CELL;
+    const y = r * CELL;
+
+    if (td.style.background) {
+      ctx.fillStyle = td.style.background;
+      ctx.fillRect(x + 1, y + 1, CELL - 1, CELL - 1);
+    }
+
+    ctx.strokeStyle = BORDER;
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(x + 0.25, y + 0.25, CELL, CELL);
+
+    const letter = td.querySelector('.cell-letter');
+    if (letter) {
+      ctx.fillStyle = td.classList.contains('hl') ? '#ffffff' : INK_LIGHT;
+      ctx.font = `${td.classList.contains('hl') ? 'bold' : ''} ${Math.round(CELL * 0.48)}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(letter.textContent, x + CELL / 2, y + CELL * 0.42);
+    }
+
+    const num = td.querySelector('.cell-num');
+    if (num) {
+      ctx.fillStyle = INK_LIGHT;
+      ctx.font = `${Math.round(CELL * 0.2)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(num.textContent, x + CELL / 2, y + CELL * 0.77);
+    }
+  });
+
+  // Render SVG lines on top
+  const svgEl = wrap.querySelector('.els-lines');
+  if (svgEl) {
+    const svgClone = svgEl.cloneNode(true);
+    svgClone.setAttribute('xmlns', SVG_NS);
+    svgClone.setAttribute('width', W);
+    svgClone.setAttribute('height', H);
+    const svgStr = new XMLSerializer().serializeToString(svgClone);
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, W, H);
+      URL.revokeObjectURL(url);
+      finishDownload(canvas);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); finishDownload(canvas); };
+    img.src = url;
+  } else {
+    finishDownload(canvas);
+  }
+}
+
+function finishDownload(canvas) {
+  canvas.toBlob((blob) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `bible-code-grid-${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, 'image/jpeg', 0.92);
+}
+
+function setupDownloadBtn() {
+  document.getElementById('download-grid-btn').addEventListener('click', downloadGridAsJPG);
+}
+
+// ---------------------------------------------------------------------
+// Pie chart — shows result counts as a donut chart
+// ---------------------------------------------------------------------
+function updatePieChart() {
+  const wrap = document.getElementById('pie-wrap');
+  if (wrap.hidden) return;
+  drawPieChart();
+}
+
+function drawPieChart() {
+  const canvas = document.getElementById('pie-canvas');
+  const legend = document.getElementById('pie-legend');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const segments = [];
+
+  // ELS search results
+  for (const r of state.allResults) {
+    if (r.matches.length > 0) {
+      segments.push({ label: r.label || r.term, count: r.matches.length, color: r.color });
+    }
+  }
+
+  // Crossword words (if grid words search was run)
+  if (state.crosswordWords.length > 0) {
+    segments.push({
+      label: 'Grid words',
+      count: state.crosswordWords.length,
+      color: '#aaaaaa',
+    });
+  }
+
+  if (segments.length === 0) {
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, W / 2 - 4, 0, Math.PI * 2);
+    ctx.fill();
+    legend.innerHTML = '<div class="pie-legend-item" style="justify-content:center">No data</div>';
+    return;
+  }
+
+  const total = segments.reduce((s, seg) => s + seg.count, 0);
+  let startAngle = -Math.PI / 2;
+  const cx = W / 2, cy = H / 2;
+  const outerR = W / 2 - 4;
+  const innerR = outerR * 0.48;
+
+  legend.innerHTML = '';
+
+  segments.forEach((seg) => {
+    const slice = (seg.count / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + innerR * Math.cos(startAngle), cy + innerR * Math.sin(startAngle));
+    ctx.arc(cx, cy, outerR, startAngle, startAngle + slice);
+    ctx.arc(cx, cy, innerR, startAngle + slice, startAngle, true);
+    ctx.closePath();
+    ctx.fillStyle = seg.color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    startAngle += slice;
+
+    const pct = Math.round((seg.count / total) * 100);
+    const item = document.createElement('div');
+    item.className = 'pie-legend-item';
+    const sw = document.createElement('div');
+    sw.className = 'pie-legend-swatch';
+    sw.style.background = seg.color;
+    const txt = document.createElement('div');
+    txt.className = 'pie-legend-text';
+    txt.textContent = `${seg.label}: ${seg.count.toLocaleString()} (${pct}%)`;
+    txt.title = txt.textContent;
+    item.appendChild(sw);
+    item.appendChild(txt);
+    legend.appendChild(item);
+  });
+}
+
+function setupPieChart() {
+  const toggleBtn = document.getElementById('pie-toggle-btn');
+  const wrap = document.getElementById('pie-wrap');
+  const closeBtn = document.getElementById('pie-close-btn');
+
+  toggleBtn.addEventListener('click', () => {
+    const show = wrap.hidden;
+    wrap.hidden = !show;
+    toggleBtn.classList.toggle('active', show);
+    if (show) drawPieChart();
+  });
+
+  closeBtn.addEventListener('click', () => {
+    wrap.hidden = true;
+    toggleBtn.classList.remove('active');
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -1494,16 +2128,21 @@ function setupGridHistory() {
 async function init() {
   setupLayout();
   setupDrawers();
+  setupSwipeDrawers();
   setupZoom();
   setupFullscreen();
   setupLineThickness();
   setupLayerMenu();
+  setupGridWordsMenu();
+  setupGridViewMenu();
   setupTheme();
   setupTermRows();
   setupGematriaCalculator();
   setupCrossword();
   setupFavorites();
   setupGridHistory();
+  setupDownloadBtn();
+  setupPieChart();
   clearGrid();
 
   document.getElementById('grid-width').addEventListener('input', renderGrid);

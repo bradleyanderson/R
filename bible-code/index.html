@@ -19,6 +19,14 @@
         <button type="button" id="layer-menu-btn" class="icon-btn" title="All word layers" aria-label="All word layers" hidden>🧩 All words</button>
         <div id="layer-menu" class="layer-menu" aria-label="All word opacity and color controls"></div>
       </div>
+      <div class="grid-words-wrap layer-menu-wrap">
+        <button type="button" id="grid-words-btn" class="icon-btn" title="Words found in this grid" aria-label="Words found in this grid" hidden>🔤 Grid Words</button>
+        <div id="grid-words-menu" class="layer-menu" aria-label="Grid word color and opacity controls"></div>
+      </div>
+      <div class="grid-view-wrap layer-menu-wrap">
+        <button type="button" id="grid-view-btn" class="icon-btn" title="Grid view mode" aria-label="Grid view mode" hidden>📐 Grid View</button>
+        <div id="grid-view-menu" class="layer-menu grid-view-menu" aria-label="Grid view options"></div>
+      </div>
       <div class="top-bar-actions">
         <div class="zoom-controls" role="group" aria-label="Grid zoom">
           <button type="button" id="zoom-out-btn" class="icon-btn icon-btn-sq" title="Zoom out" aria-label="Zoom out">−</button>
@@ -49,8 +57,13 @@
           <input type="range" id="grid-height" min="4" max="100" value="24" />
         </label>
         <button type="button" id="find-overlap-btn" class="secondary">Find crossing words</button>
-        <button type="button" id="crossword-btn" class="secondary" title="Scan the current grid for Hebrew dictionary words crossing your searched word">🔎 Open search</button>
+        <button type="button" id="crossword-btn" class="secondary" title="Scan the entire grid for all Hebrew dictionary words">🔎 Open search</button>
         <span id="grid-info" class="muted"></span>
+      </div>
+      <div id="pie-wrap" class="pie-wrap" hidden aria-label="Results pie chart">
+        <canvas id="pie-canvas" width="140" height="140"></canvas>
+        <div id="pie-legend" class="pie-legend"></div>
+        <button type="button" id="pie-close-btn" class="pie-close" title="Close chart" aria-label="Close chart">✕</button>
       </div>
       <div id="grid-container" class="grid-scroll">
         <p class="muted" id="grid-placeholder">Open "Search" below, run a search, then choose "View grid" on a result to explore the letter grid here.</p>
@@ -58,6 +71,9 @@
       <p id="overlap-status" class="muted"></p>
       <p id="status" class="status">Loading Torah text…</p>
     </main>
+
+    <!-- Fixed download button -->
+    <button type="button" id="download-grid-btn" class="download-btn" title="Download grid as JPG" aria-label="Download grid as JPG" hidden>⬇ JPG</button>
 
     <!-- Theme drawer (left) -->
     <aside id="theme-drawer" class="drawer drawer-left">
@@ -99,6 +115,10 @@
           Button text
           <input type="color" id="theme-btn-text" />
         </label>
+        <label class="color-row">
+          Active buttons
+          <input type="color" id="theme-btn-active" />
+        </label>
         <button type="button" id="theme-reset" class="secondary">Reset to default</button>
       </div>
     </aside>
@@ -107,6 +127,7 @@
     <aside id="results-drawer" class="drawer drawer-right">
       <div class="drawer-header">
         <h2>Results</h2>
+        <button type="button" id="pie-toggle-btn" class="icon-btn icon-btn-sq" title="Toggle pie chart" aria-label="Toggle pie chart">🥧</button>
         <button type="button" class="drawer-close" data-close="results-drawer" aria-label="Close results panel">✕</button>
       </div>
       <div class="drawer-body">
@@ -133,78 +154,89 @@
         <span class="handle-arrow" aria-hidden="true">▲</span>
       </button>
       <div class="drawer-body">
-        <h3>Words</h3>
-        <details class="hint">
-          <summary>How searching words works</summary>
-          <p class="muted">
-            Type a word in any language — it's translated to Hebrew and shown
-            faded inside the box, with its gematria value alongside. Press
-            Enter to search everything entered so far and open a new box for
-            the next word. You can also type Hebrew directly. Up to 30 words,
-            each with its own color and label shown on its line in the grid.
-          </p>
-        </details>
-        <div id="term-rows"></div>
-        <button type="button" id="add-term-btn" class="secondary">+ Add another word</button>
 
-        <h3>Search range</h3>
-        <div class="controls-row">
-          <label>
-            Min skip
-            <input type="number" id="min-skip" value="2" min="1" max="2000" />
-          </label>
-          <label>
-            Max skip
-            <input type="number" id="max-skip" value="200" min="1" max="2000" />
-          </label>
-          <label>
-            Search in
-            <select id="book-select">
-              <option value="all" selected>Whole Torah</option>
-              <option value="Genesis">Genesis only</option>
-              <option value="Exodus">Exodus only</option>
-              <option value="Leviticus">Leviticus only</option>
-              <option value="Numbers">Numbers only</option>
-              <option value="Deuteronomy">Deuteronomy only</option>
-            </select>
-          </label>
-        </div>
-        <details class="hint">
-          <summary>What does "skip" mean?</summary>
-          <p class="muted">
-            "Skip" is how many letters apart each letter is in the raw text
-            (skip 1 = the word as normally written). Larger ranges find more
-            matches but take longer. Closing this panel runs the search with
-            the words currently entered.
-          </p>
+        <details class="section-details" open>
+          <summary>Words</summary>
+          <details class="hint">
+            <summary>How searching words works</summary>
+            <p class="muted">
+              Type a word in any language — it's translated to Hebrew and shown
+              faded inside the box, with its gematria value alongside. Press
+              Enter to search everything entered so far and open a new box for
+              the next word. You can also type Hebrew directly. Up to 30 words,
+              each with its own color and label shown on its line in the grid.
+            </p>
+          </details>
+          <div id="term-rows"></div>
+          <button type="button" id="add-term-btn" class="secondary">+ Add another word</button>
         </details>
 
-        <h3>Gematria calculator</h3>
-        <details class="hint">
-          <summary>What is this?</summary>
-          <p class="muted">
-            Type a Hebrew word to see its gematria (numeric) value — the same
-            values shown next to each search word above and under every letter
-            in the grid.
-          </p>
+        <details class="section-details" open>
+          <summary>Search range</summary>
+          <div class="controls-row">
+            <label>
+              Min skip
+              <input type="number" id="min-skip" value="2" min="1" max="2000" />
+            </label>
+            <label>
+              Max skip
+              <input type="number" id="max-skip" value="200" min="1" max="2000" />
+            </label>
+            <label>
+              Search in
+              <select id="book-select">
+                <option value="all" selected>Whole Torah</option>
+                <option value="Genesis">Genesis only</option>
+                <option value="Exodus">Exodus only</option>
+                <option value="Leviticus">Leviticus only</option>
+                <option value="Numbers">Numbers only</option>
+                <option value="Deuteronomy">Deuteronomy only</option>
+              </select>
+            </label>
+          </div>
+          <details class="hint">
+            <summary>What does "skip" mean?</summary>
+            <p class="muted">
+              "Skip" is how many letters apart each letter is in the raw text
+              (skip 1 = the word as normally written). Larger ranges find more
+              matches but take longer. Closing this panel runs the search with
+              the words currently entered.
+            </p>
+          </details>
         </details>
-        <div class="gematria-calc">
-          <input type="text" id="gematria-input" class="gematria-input" dir="rtl" maxlength="40" placeholder="הקלד מילה בעברית" aria-label="Hebrew word for gematria calculation" />
-          <div id="gematria-result" class="gematria-result" aria-live="polite"></div>
-        </div>
 
-        <h3>Crossing words</h3>
-        <details class="hint">
-          <summary>How this works</summary>
-          <p class="muted">
-            After opening a grid view, click "🔎 Open search" on the grid
-            toolbar to scan it for dictionary Hebrew words crossing your
-            searched word's path. Matches are outlined on the grid and listed
-            below, translated into your language, with gematria values.
-          </p>
+        <details class="section-details">
+          <summary>Gematria calculator</summary>
+          <details class="hint">
+            <summary>What is this?</summary>
+            <p class="muted">
+              Type a Hebrew word to see its gematria (numeric) value — the same
+              values shown next to each search word above and under every letter
+              in the grid.
+            </p>
+          </details>
+          <div class="gematria-calc">
+            <input type="text" id="gematria-input" class="gematria-input" dir="rtl" maxlength="40" placeholder="הקלד מילה בעברית" aria-label="Hebrew word for gematria calculation" />
+            <div id="gematria-result" class="gematria-result" aria-live="polite"></div>
+          </div>
         </details>
-        <p id="crossword-status" class="muted"></p>
-        <div id="crossword-results" class="presets"></div>
+
+        <details class="section-details">
+          <summary>Grid word search</summary>
+          <details class="hint">
+            <summary>How this works</summary>
+            <p class="muted">
+              After opening a grid view, click "🔎 Open search" on the grid
+              toolbar to scan every cell for Hebrew dictionary words in all
+              8 directions. All matches are outlined on the grid, labeled with
+              translations and gematria values, and listed below. Use the
+              "Grid Words" menu in the toolbar to control each word's color
+              and opacity individually.
+            </p>
+          </details>
+          <p id="crossword-status" class="muted"></p>
+          <div id="crossword-results" class="presets"></div>
+        </details>
 
         <details class="about-details">
           <summary>History <span id="history-count" class="muted"></span></summary>
