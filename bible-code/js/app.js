@@ -1507,7 +1507,7 @@ function renderGridWordsMenu() {
     btn.hidden = true;
     return;
   }
-  btn.hidden = false;
+  btn.hidden = true;
 
   // Master opacity slider at the top
   const masterWrap = document.createElement('div');
