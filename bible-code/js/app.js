@@ -28,6 +28,7 @@ const state = {
   overlayMatches: [],   // [{match, color, label}] accumulated for multi-grid overlay
   crosswordWords: [],   // [{word, color, opacity, cells}] from open search
   gridViewMode: 'overlay', // 'overlay' | 'side-by-side'
+  gridBounds: null,     // { topLeftIdx, bottomRightIdx, cols } for current grid view
 };
 
 function clamp(v, lo, hi) {
@@ -759,6 +760,7 @@ function clearGrid() {
     '<p class="muted" id="grid-placeholder">Open "Search" below, run a search, then choose "View grid" on a result to explore the letter grid here.</p>';
   document.getElementById('grid-info').textContent = '';
   document.getElementById('download-grid-btn').hidden = true;
+  state.gridBounds = null;
   clearCrosswordResults();
   clearGridWordsMenu();
 }
@@ -951,6 +953,7 @@ function renderGrid() {
     const { wrap, topLeftIdx, bottomRightIdx } = buildSingleGrid(
       state.currentCenter, rows, cols, state.flatMatches, null
     );
+    state.gridBounds = { topLeftIdx, bottomRightIdx, cols };
     container.appendChild(wrap);
     const firstIdx = clamp(topLeftIdx, 0, TorahData.text.length - 1);
     const lastIdx = clamp(bottomRightIdx, 0, TorahData.text.length - 1);
@@ -1819,21 +1822,48 @@ function drawPieChart() {
   ctx.clearRect(0, 0, W, H);
 
   const segments = [];
+  const gb = state.gridBounds;
 
-  // ELS search results
-  for (const r of state.allResults) {
-    if (r.matches.length > 0) {
-      segments.push({ label: r.label || r.term, count: r.matches.length, color: r.color });
+  if (gb) {
+    // Grid is visible — count cells per term within the current grid bounds
+    const { topLeftIdx, bottomRightIdx, cols } = gb;
+
+    const rows = Math.round((bottomRightIdx - topLeftIdx + 1) / cols);
+    const inGrid = (idx) => {
+      if (idx < topLeftIdx || idx > bottomRightIdx) return false;
+      const rel = idx - topLeftIdx;
+      return Math.floor(rel / cols) < rows;
+    };
+
+    for (const r of state.allResults) {
+      let cellCount = 0;
+      for (const m of r.matches) {
+        for (const idx of m.indices) {
+          if (inGrid(idx)) cellCount++;
+        }
+      }
+      if (cellCount > 0) {
+        segments.push({ label: r.label || r.term, count: cellCount, color: r.color });
+      }
     }
-  }
 
-  // Crossword words (if grid words search was run)
-  if (state.crosswordWords.length > 0) {
-    segments.push({
-      label: 'Grid words',
-      count: state.crosswordWords.length,
-      color: '#aaaaaa',
-    });
+    // Each crossword word as its own segment
+    for (const cw of state.crosswordWords) {
+      const cellCount = (cw.cells || []).filter((c) => inGrid(c.idx)).length;
+      if (cellCount > 0) {
+        segments.push({ label: cw.translated || cw.word, count: cellCount, color: cw.color });
+      }
+    }
+  } else {
+    // No grid — fall back to total match counts
+    for (const r of state.allResults) {
+      if (r.matches.length > 0) {
+        segments.push({ label: r.label || r.term, count: r.matches.length, color: r.color });
+      }
+    }
+    for (const cw of state.crosswordWords) {
+      segments.push({ label: cw.translated || cw.word, count: (cw.cells || []).length, color: cw.color });
+    }
   }
 
   if (segments.length === 0) {
@@ -1841,7 +1871,8 @@ function drawPieChart() {
     ctx.beginPath();
     ctx.arc(W / 2, H / 2, W / 2 - 4, 0, Math.PI * 2);
     ctx.fill();
-    legend.innerHTML = '<div class="pie-legend-item" style="justify-content:center">No data</div>';
+    legend.innerHTML = '<div class="pie-legend-item" style="justify-content:center">' +
+      (gb ? 'No results in this grid' : 'Run a search first') + '</div>';
     return;
   }
 
