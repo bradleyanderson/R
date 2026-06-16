@@ -1820,54 +1820,62 @@ function drawPieChart() {
   const canvas = document.getElementById('pie-canvas');
   const legend = document.getElementById('pie-legend');
   const ctx = canvas.getContext('2d');
-  const W = canvas.width;
-  const H = canvas.height;
+  const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
 
-  const segments = [];
+  // Build raw segments with source tracking (so color changes propagate back)
+  const rawSegs = [];
   const gb = state.gridBounds;
 
   if (gb) {
-    // Grid is visible — count cells per term within the current grid bounds
     const { topLeftIdx, bottomRightIdx, cols } = gb;
-
     const rows = Math.round((bottomRightIdx - topLeftIdx + 1) / cols);
     const inGrid = (idx) => {
       if (idx < topLeftIdx || idx > bottomRightIdx) return false;
-      const rel = idx - topLeftIdx;
-      return Math.floor(rel / cols) < rows;
+      return Math.floor((idx - topLeftIdx) / cols) < rows;
     };
-
-    for (const r of state.allResults) {
+    for (let i = 0; i < state.allResults.length; i++) {
+      const r = state.allResults[i];
       let cellCount = 0;
-      for (const m of r.matches) {
-        for (const idx of m.indices) {
-          if (inGrid(idx)) cellCount++;
-        }
-      }
-      if (cellCount > 0) {
-        segments.push({ label: r.label || r.term, count: cellCount, color: r.color });
-      }
+      for (const m of r.matches) for (const idx of m.indices) if (inGrid(idx)) cellCount++;
+      if (cellCount > 0)
+        rawSegs.push({ label: r.label || r.term, count: cellCount, color: r.color, source: 'result', idx: i });
     }
-
-    // Each crossword word as its own segment
-    for (const cw of state.crosswordWords) {
-      const cellCount = (cw.cells || []).filter((c) => inGrid(c.idx)).length;
-      if (cellCount > 0) {
-        segments.push({ label: cw.translated || cw.word, count: cellCount, color: cw.color });
-      }
+    for (let j = 0; j < state.crosswordWords.length; j++) {
+      const cw = state.crosswordWords[j];
+      const cellCount = (cw.cells || []).filter(c => inGrid(c.idx)).length;
+      if (cellCount > 0)
+        rawSegs.push({ label: cw.translated || cw.word, count: cellCount, color: cw.color, source: 'cw', idx: j });
     }
   } else {
-    // No grid — fall back to total match counts
-    for (const r of state.allResults) {
-      if (r.matches.length > 0) {
-        segments.push({ label: r.label || r.term, count: r.matches.length, color: r.color });
-      }
+    for (let i = 0; i < state.allResults.length; i++) {
+      const r = state.allResults[i];
+      if (r.matches.length > 0)
+        rawSegs.push({ label: r.label || r.term, count: r.matches.length, color: r.color, source: 'result', idx: i });
     }
-    for (const cw of state.crosswordWords) {
-      segments.push({ label: cw.translated || cw.word, count: (cw.cells || []).length, color: cw.color });
+    for (let j = 0; j < state.crosswordWords.length; j++) {
+      const cw = state.crosswordWords[j];
+      if ((cw.cells || []).length > 0)
+        rawSegs.push({ label: cw.translated || cw.word, count: (cw.cells || []).length, color: cw.color, source: 'cw', idx: j });
     }
   }
+
+  // Group duplicate labels into one segment
+  const groupMap = new Map();
+  for (const seg of rawSegs) {
+    const key = (seg.label || '').trim().toLowerCase();
+    if (groupMap.has(key)) {
+      const g = groupMap.get(key);
+      g.count += seg.count;
+      g.sources.push({ source: seg.source, idx: seg.idx });
+    } else {
+      groupMap.set(key, {
+        label: seg.label, count: seg.count, color: seg.color,
+        sources: [{ source: seg.source, idx: seg.idx }],
+      });
+    }
+  }
+  const segments = [...groupMap.values()].filter(s => s.count > 0);
 
   if (segments.length === 0) {
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
@@ -1881,10 +1889,7 @@ function drawPieChart() {
 
   const total = segments.reduce((s, seg) => s + seg.count, 0);
   let startAngle = -Math.PI / 2;
-  const cx = W / 2, cy = H / 2;
-  const outerR = W / 2 - 4;
-  const innerR = outerR * 0.48;
-
+  const cx = W / 2, cy = H / 2, outerR = W / 2 - 4, innerR = outerR * 0.48;
   legend.innerHTML = '';
 
   segments.forEach((seg) => {
@@ -1899,15 +1904,35 @@ function drawPieChart() {
     ctx.strokeStyle = 'rgba(0,0,0,0.3)';
     ctx.lineWidth = 1;
     ctx.stroke();
-
     startAngle += slice;
 
     const pct = Math.round((seg.count / total) * 100);
     const item = document.createElement('div');
     item.className = 'pie-legend-item';
-    const sw = document.createElement('div');
+
+    // Swatch — invisible color input overlaid on top opens native color picker on click
+    const sw = document.createElement('span');
     sw.className = 'pie-legend-swatch';
     sw.style.background = seg.color;
+
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = /^#[0-9a-f]{6}$/i.test(seg.color) ? seg.color : '#888888';
+    colorInput.style.cssText = 'position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0;';
+    colorInput.title = 'Click to change color';
+    colorInput.addEventListener('change', (e) => {
+      const newColor = e.target.value;
+      seg.color = newColor;
+      sw.style.background = newColor;
+      for (const { source, idx } of seg.sources) {
+        if (source === 'result' && state.allResults[idx]) state.allResults[idx].color = newColor;
+        if (source === 'cw' && state.crosswordWords[idx]) state.crosswordWords[idx].color = newColor;
+      }
+      drawPieChart();
+      if (state.currentCenter !== undefined) renderGrid();
+    });
+    sw.appendChild(colorInput);
+
     const txt = document.createElement('div');
     txt.className = 'pie-legend-text';
     txt.textContent = `${seg.label}: ${seg.count.toLocaleString()} (${pct}%)`;

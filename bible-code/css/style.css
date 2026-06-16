@@ -1431,10 +1431,12 @@ button {
 }
 
 .pie-legend-swatch {
+  position: relative;
   width: 0.65rem;
   height: 0.65rem;
   border-radius: 50%;
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 .pie-legend-text {
