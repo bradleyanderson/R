@@ -1535,6 +1535,25 @@ button {
   height: 0;
 }
 
+/* ─── 3D Toolbar Sliders ─────────────────────────────────────────────── */
+.three-d-sliders {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.three-d-sliders label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.three-d-sliders input[type="range"] {
+  width: 70px;
+}
+
 /* ─── 3D Panels ──────────────────────────────────────────────────────── */
 .panel-3d {
   position: absolute;

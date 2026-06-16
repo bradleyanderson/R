@@ -967,9 +967,9 @@ function renderGrid() {
   }
 
   // Show download button when grid is visible (only in 2D mode)
-  document.getElementById('download-grid-btn').hidden = viewMode3D.active;
+  document.getElementById('download-grid-btn').hidden = cam3D.active;
   updatePieChart();
-  if (viewMode3D.active) renderThreeDView();
+  if (cam3D.active) renderThreeDView();
   applyHeatmap();
 }
 
@@ -2214,187 +2214,241 @@ function setupHeatmap() {
 }
 
 // ---------------------------------------------------------------------
-// 3D View
+// 3D View — canvas-based perspective renderer
+// Each grid cell becomes a 3D pillar; height = letter gematria value.
 // ---------------------------------------------------------------------
-const viewMode3D = { active: false, mode: 'gallery', rotX: -20, rotY: 25, scale: 1 };
+const cam3D = { rotX: 0.45, rotY: 0.4, zoom: 1, active: false };
+let rafId3D = null;
 
 function switchViewMode(to3D) {
-  viewMode3D.active = to3D;
+  cam3D.active = to3D;
   document.getElementById('view-2d-btn').classList.toggle('active', !to3D);
   document.getElementById('view-3d-btn').classList.toggle('active', to3D);
   document.getElementById('grid-container').style.display = to3D ? 'none' : '';
   document.getElementById('three-d-stage').style.display = to3D ? 'flex' : 'none';
+  document.getElementById('three-d-sliders').style.display = to3D ? 'flex' : 'none';
   document.getElementById('download-grid-btn').hidden = to3D || state.currentCenter === undefined;
-  if (to3D && state.currentCenter !== undefined) renderThreeDView();
+  if (to3D) renderThreeDView();
 }
 
-function switch3DMode(mode) {
-  viewMode3D.mode = mode;
-  document.querySelectorAll('.three-d-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-  if (viewMode3D.active && state.currentCenter !== undefined) renderThreeDView();
+// Project a 3-D world point to 2-D canvas coords.
+function proj3D(wx, wy, wz, cw, ch) {
+  const cy = Math.cos(cam3D.rotY), sy = Math.sin(cam3D.rotY);
+  const cx = Math.cos(cam3D.rotX), sx = Math.sin(cam3D.rotX);
+  // Rotate Y (horizontal spin)
+  const x1 = wx * cy + wz * sy;
+  const z1 = -wx * sy + wz * cy;
+  // Rotate X (vertical tilt)
+  const y2 = wy * cx - z1 * sx;
+  const z2 = wy * sx + z1 * cx;
+  // Perspective
+  const fov = 600;
+  const scale = cam3D.zoom * fov / (fov + z2 + 300);
+  return { sx: cw / 2 + x1 * scale, sy: ch / 2 + y2 * scale, depth: z2 };
 }
 
-function getAdjacentCenter(base, dRows, dCols, stride) {
-  return clamp(base + dRows * stride + dCols, 0, TorahData.text.length - 1);
+function shadeColor(hex, amt) {
+  if (!hex || hex[0] !== '#' || hex.length < 7) return hex || '#888';
+  const r = clamp(parseInt(hex.slice(1, 3), 16) + amt, 0, 255);
+  const g = clamp(parseInt(hex.slice(3, 5), 16) + amt, 0, 255);
+  const b = clamp(parseInt(hex.slice(5, 7), 16) + amt, 0, 255);
+  return `rgb(${r},${g},${b})`;
 }
 
-function buildMiniGrid(center, rows, cols, matches) {
-  const { wrap } = buildSingleGrid(center, rows, cols, matches, null);
-  wrap.classList.add('panel-grid-wrap');
-  return wrap;
+function fillQuad(ctx, p0, p1, p2, p3, color) {
+  ctx.beginPath();
+  ctx.moveTo(p0.sx, p0.sy);
+  ctx.lineTo(p1.sx, p1.sy);
+  ctx.lineTo(p2.sx, p2.sy);
+  ctx.lineTo(p3.sx, p3.sy);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
 }
 
-function makePanel3D(content, label, w, h) {
-  const el = document.createElement('div');
-  el.className = 'panel-3d';
-  el.style.width = w + 'px';
-  el.style.height = h + 'px';
-  if (label) {
-    const lbl = document.createElement('div');
-    lbl.className = 'panel-3d-label';
-    lbl.textContent = label;
-    el.appendChild(lbl);
+function renderThreeDView() {
+  const canvas = document.getElementById('three-d-canvas');
+  if (!canvas) return;
+  const stage = document.getElementById('three-d-stage');
+  canvas.width  = stage.clientWidth  || 800;
+  canvas.height = stage.clientHeight || 560;
+  const cw = canvas.width, ch = canvas.height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, cw, ch);
+
+  if (state.currentCenter === undefined) {
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.font = '15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('View a 2D grid first, then switch to 3D', cw / 2, ch / 2);
+    return;
   }
-  el.appendChild(content);
-  return el;
-}
 
-function buildGallery(scene, panels, gRows, gCols) {
-  const pW = 210, pH = 210, pR = 10, pC = 10;
-  const spacing = 240;
-  const n = Math.max(panels.length, 1);
-  panels.forEach((p, i) => {
-    const content = buildMiniGrid(p.center, pR, pC, p.matches);
-    const panel = makePanel3D(content, p.label, pW, pH);
-    const offset = i - (n - 1) / 2;
-    panel.style.position = 'absolute';
-    panel.style.left = `${offset * spacing - pW / 2}px`;
-    panel.style.top = `-${pH / 2}px`;
-    const ry = offset * -10;
-    const tz = -Math.abs(offset) * 70;
-    panel.style.transform = `translateZ(${tz}px) rotateY(${ry}deg)`;
-    scene.appendChild(panel);
-  });
-}
+  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 60);
+  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 60);
+  const xSp  = parseInt(document.getElementById('slider-x-spread').value, 10);
+  const ySp  = parseInt(document.getElementById('slider-y-spread').value, 10);
+  const zSc  = parseInt(document.getElementById('slider-z-height').value, 10);
 
-function buildCubeMode(scene, panels, gRows, gCols) {
-  const size = 200, half = size / 2;
-  const pR = 9, pC = 9;
-  const stride = Math.min(gCols, 50);
-  const c = state.currentCenter;
-  const faces = [
-    { label: 'Front',  tf: `translateZ(${half}px)`,                 center: c },
-    { label: 'Back',   tf: `rotateY(180deg) translateZ(${half}px)`, center: getAdjacentCenter(c, 0, pC * 2, stride) },
-    { label: 'Right',  tf: `rotateY(90deg) translateZ(${half}px)`,  center: getAdjacentCenter(c, 0, pC, stride) },
-    { label: 'Left',   tf: `rotateY(-90deg) translateZ(${half}px)`, center: getAdjacentCenter(c, 0, -pC, stride) },
-    { label: 'Top',    tf: `rotateX(90deg) translateZ(${half}px)`,  center: getAdjacentCenter(c, pR, 0, stride) },
-    { label: 'Bottom', tf: `rotateX(-90deg) translateZ(${half}px)`, center: getAdjacentCenter(c, -pR, 0, stride) },
-  ];
-  faces.forEach((face, i) => {
-    const src = panels[i] || { center: face.center, matches: state.flatMatches };
-    const content = buildMiniGrid(src.center, pR, pC, src.matches);
-    const panel = makePanel3D(content, face.label, size, size);
-    panel.classList.add('panel-cube-face');
-    panel.style.position = 'absolute';
-    panel.style.left = `-${half}px`;
-    panel.style.top = `-${half}px`;
-    panel.style.transform = face.tf;
-    scene.appendChild(panel);
-  });
-}
+  const grid = buildGrid(state.currentCenter, rows, cols);
+  const topLeftIdx     = grid[0][0].idx;
+  const bottomRightIdx = grid[rows - 1][cols - 1].idx;
 
-function buildRubiksMode(scene, panels, gRows, gCols) {
-  const cellSz = 120, gap = 5, step = cellSz + gap;
-  const pR = 6, pC = 6;
-  const stride = Math.min(gCols, 50);
-  const c = state.currentCenter;
-  for (let z = -1; z <= 1; z++) {
-    for (let y = -1; y <= 1; y++) {
-      for (let x = -1; x <= 1; x++) {
-        const center = getAdjacentCenter(c, y * pR, x * pC, stride);
-        const src = panels.find((_, idx) => idx === (z + 1) * 9 + (y + 1) * 3 + (x + 1))
-          || { center, matches: state.flatMatches };
-        const content = buildMiniGrid(src.center, pR, pC, src.matches);
-        const panel = makePanel3D(content, null, cellSz, cellSz);
-        panel.classList.add('panel-rubiks-cell');
-        panel.style.position = 'absolute';
-        panel.style.left = `${x * step - cellSz / 2}px`;
-        panel.style.top = `${y * step - cellSz / 2}px`;
-        panel.style.transform = `translateZ(${z * step}px)`;
-        scene.appendChild(panel);
+  // Build per-index highlight map
+  const hlMap = new Map();
+  for (const m of state.flatMatches) {
+    const ri = state.allResults[m.termIndex];
+    if (!ri) continue;
+    for (const idx of m.indices) {
+      if (idx >= topLeftIdx && idx <= bottomRightIdx && !hlMap.has(idx))
+        hlMap.set(idx, ri.color);
+    }
+  }
+
+  // Heat map scores (if slider > 0)
+  const heatOp = parseInt(document.getElementById('heatmap-slider').value, 10) / 100;
+  const heatScore = new Float32Array(rows * cols);
+  if (heatOp > 0) {
+    const chars = grid.map(row => row.map(c => c.char || ''));
+    const scanH = (words, val) => {
+      for (const w of words) {
+        const wc = [...w];
+        for (const [dr, dc] of CROSS_DIRECTIONS) {
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              let ok = true; const hits = [];
+              for (let k = 0; k < wc.length; k++) {
+                const nr = r + dr * k, nc = c + dc * k;
+                if (nr < 0 || nr >= rows || nc < 0 || nc >= cols || chars[nr][nc] !== wc[k]) { ok = false; break; }
+                hits.push(nr * cols + nc);
+              }
+              if (ok) hits.forEach(i => { heatScore[i] += val; });
+            }
+          }
+        }
       }
+    };
+    scanH(HEATMAP_POSITIVE, 1);
+    scanH(HEATMAP_NEGATIVE, -1);
+  }
+
+  // Collect bars and sort back-to-front
+  const bars = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = grid[r][c];
+      const ch_  = cell.char || '';
+      const val  = letterValue(ch_) || 0;
+      const barH = (val / 22) * zSc;   // 22 = approx max letter value bucket
+      const wx   = (c - cols / 2) * xSp;
+      const wz   = (r - rows / 2) * ySp;
+      let color = hlMap.has(cell.idx) ? hlMap.get(cell.idx) : '#1e2b3a';
+
+      // Blend heat map
+      if (heatOp > 0) {
+        const s = heatScore[r * cols + c];
+        if (s !== 0) {
+          const hc = s > 0 ? [0, 232, 122] : [255, 51, 51];
+          const ri = clamp(parseInt(color.slice(1,3)||'1e',16), 0, 255);
+          const gi = clamp(parseInt(color.slice(3,5)||'2b',16), 0, 255);
+          const bi = clamp(parseInt(color.slice(5,7)||'3a',16), 0, 255);
+          const t  = Math.min(Math.abs(s) * 0.3, 0.7) * heatOp;
+          const blend = v => Math.round(v[0] * t + v[1] * (1-t));
+          color = `rgb(${blend([hc[0],ri])},${blend([hc[1],gi])},${blend([hc[2],bi])})`;
+        }
+      }
+
+      const depth = proj3D(wx + xSp/2, -barH/2, wz + ySp/2, cw, ch).depth;
+      bars.push({ r, c, ch_, barH, wx, wz, color, depth });
+    }
+  }
+  bars.sort((a, b) => b.depth - a.depth);
+
+  // Draw bars
+  for (const { ch_, barH, wx, wz, color } of bars) {
+    const x0 = wx, x1 = wx + xSp, z0 = wz, z1 = wz + ySp;
+    const bot0 = proj3D(x0, 0,     z0, cw, ch);
+    const bot1 = proj3D(x1, 0,     z0, cw, ch);
+    const bot2 = proj3D(x1, 0,     z1, cw, ch);
+    const bot3 = proj3D(x0, 0,     z1, cw, ch);
+    const top0 = proj3D(x0, -barH, z0, cw, ch);
+    const top1 = proj3D(x1, -barH, z0, cw, ch);
+    const top2 = proj3D(x1, -barH, z1, cw, ch);
+    const top3 = proj3D(x0, -barH, z1, cw, ch);
+
+    if (barH < 0.5) {
+      // Flat floor tile
+      fillQuad(ctx, bot0, bot1, bot2, bot3, shadeColor(color.startsWith('#') ? color : '#1e2b3a', -20));
+    } else {
+      // Left face
+      fillQuad(ctx, bot3, bot0, top0, top3, shadeColor(color.startsWith('#') ? color : '#1e2b3a', -55));
+      // Right face
+      fillQuad(ctx, bot1, bot2, top2, top1, shadeColor(color.startsWith('#') ? color : '#1e2b3a', -30));
+      // Front face
+      fillQuad(ctx, bot0, bot1, top1, top0, shadeColor(color.startsWith('#') ? color : '#1e2b3a', -10));
+      // Top face (brightest)
+      fillQuad(ctx, top0, top1, top2, top3, color.startsWith('#') ? color : color);
+    }
+
+    // Letter on top
+    if (ch_ && barH > 1) {
+      const mx = (top0.sx + top1.sx + top2.sx + top3.sx) / 4;
+      const my = (top0.sy + top1.sy + top2.sy + top3.sy) / 4;
+      const fs = Math.max(7, Math.min(14, xSp * 0.45));
+      ctx.font = `bold ${fs}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fillText(ch_, mx, my);
     }
   }
 }
 
-function applySceneRotation() {
-  const scene = document.getElementById('three-d-scene');
-  if (scene) scene.style.transform = `scale(${viewMode3D.scale}) rotateX(${viewMode3D.rotX}deg) rotateY(${viewMode3D.rotY}deg)`;
-}
-
-function setupSceneDrag() {
-  const vp = document.getElementById('three-d-viewport');
-  if (!vp) return;
-  // Clone to clear old listeners
-  const fresh = vp.cloneNode(false);
-  while (vp.firstChild) fresh.appendChild(vp.firstChild);
-  vp.parentNode.replaceChild(fresh, vp);
-  fresh.id = 'three-d-viewport';
-
+function setupSceneDrag3D() {
+  const canvas = document.getElementById('three-d-canvas');
+  if (!canvas) return;
   let dragging = false, lx = 0, ly = 0;
-  fresh.addEventListener('mousedown', e => { dragging = true; lx = e.clientX; ly = e.clientY; e.preventDefault(); });
+
+  canvas.addEventListener('mousedown', e => { dragging = true; lx = e.clientX; ly = e.clientY; e.preventDefault(); });
   window.addEventListener('mousemove', e => {
     if (!dragging) return;
-    viewMode3D.rotY += (e.clientX - lx) * 0.4;
-    viewMode3D.rotX -= (e.clientY - ly) * 0.4;
+    cam3D.rotY += (e.clientX - lx) * 0.006;
+    cam3D.rotX += (e.clientY - ly) * 0.006;
     lx = e.clientX; ly = e.clientY;
-    applySceneRotation();
+    if (rafId3D) cancelAnimationFrame(rafId3D);
+    rafId3D = requestAnimationFrame(renderThreeDView);
   });
   window.addEventListener('mouseup', () => { dragging = false; });
-  fresh.addEventListener('touchstart', e => { lx = e.touches[0].clientX; ly = e.touches[0].clientY; }, { passive: true });
-  fresh.addEventListener('touchmove', e => {
-    viewMode3D.rotY += (e.touches[0].clientX - lx) * 0.4;
-    viewMode3D.rotX -= (e.touches[0].clientY - ly) * 0.4;
+
+  canvas.addEventListener('touchstart', e => { lx = e.touches[0].clientX; ly = e.touches[0].clientY; }, { passive: true });
+  canvas.addEventListener('touchmove', e => {
+    cam3D.rotY += (e.touches[0].clientX - lx) * 0.006;
+    cam3D.rotX += (e.touches[0].clientY - ly) * 0.006;
     lx = e.touches[0].clientX; ly = e.touches[0].clientY;
-    applySceneRotation();
+    if (rafId3D) cancelAnimationFrame(rafId3D);
+    rafId3D = requestAnimationFrame(renderThreeDView);
     e.preventDefault();
   }, { passive: false });
-  fresh.addEventListener('wheel', e => {
-    viewMode3D.scale = clamp(viewMode3D.scale - e.deltaY * 0.001, 0.2, 3);
-    applySceneRotation();
+
+  canvas.addEventListener('wheel', e => {
+    cam3D.zoom = clamp(cam3D.zoom * (e.deltaY < 0 ? 1.08 : 0.93), 0.15, 4);
+    if (rafId3D) cancelAnimationFrame(rafId3D);
+    rafId3D = requestAnimationFrame(renderThreeDView);
     e.preventDefault();
   }, { passive: false });
-}
-
-function renderThreeDView() {
-  if (state.currentCenter === undefined) return;
-  const gCols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
-  const gRows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
-  const scene = document.getElementById('three-d-scene');
-  scene.innerHTML = '';
-
-  const panels = [
-    { center: state.currentCenter, matches: state.flatMatches, label: 'Primary' },
-    ...state.overlayMatches.map(({ match, label }) => ({
-      center: centerOfMatch(match), matches: [...state.flatMatches, match], label: label || match.term || '',
-    })),
-  ];
-
-  if (viewMode3D.mode === 'gallery') buildGallery(scene, panels, gRows, gCols);
-  else if (viewMode3D.mode === 'cube') buildCubeMode(scene, panels, gRows, gCols);
-  else buildRubiksMode(scene, panels, gRows, gCols);
-
-  applySceneRotation();
-  setupSceneDrag();
-
-  const heatOpacity = parseInt(document.getElementById('heatmap-slider').value, 10) / 100;
-  if (heatOpacity > 0) scene.querySelectorAll('.els-grid').forEach(g => applyHeatmapToGrid(g, heatOpacity));
 }
 
 function setup3DView() {
   document.getElementById('view-2d-btn').addEventListener('click', () => switchViewMode(false));
   document.getElementById('view-3d-btn').addEventListener('click', () => switchViewMode(true));
-  document.querySelectorAll('.three-d-mode-btn').forEach(btn => btn.addEventListener('click', () => switch3DMode(btn.dataset.mode)));
+  ['slider-x-spread','slider-y-spread','slider-z-height'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => { if (cam3D.active) renderThreeDView(); });
+  });
+  setupSceneDrag3D();
+  window.addEventListener('resize', () => { if (cam3D.active) renderThreeDView(); });
 }
 
 // ---------------------------------------------------------------------
