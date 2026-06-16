@@ -58,12 +58,8 @@
         </label>
         <button type="button" id="find-overlap-btn" class="secondary">Find crossing words</button>
         <button type="button" id="crossword-btn" class="secondary" title="Scan the entire grid for all Hebrew dictionary words">🔎 Open search</button>
+        <button type="button" id="pie-toggle-btn" class="icon-btn icon-btn-sq" title="Toggle pie chart" aria-label="Toggle pie chart">🥧</button>
         <span id="grid-info" class="muted"></span>
-      </div>
-      <div id="pie-wrap" class="pie-wrap" hidden aria-label="Results pie chart">
-        <canvas id="pie-canvas" width="140" height="140"></canvas>
-        <div id="pie-legend" class="pie-legend"></div>
-        <button type="button" id="pie-close-btn" class="pie-close" title="Close chart" aria-label="Close chart">✕</button>
       </div>
       <div id="grid-container" class="grid-scroll">
         <p class="muted" id="grid-placeholder">Open "Search" below, run a search, then choose "View grid" on a result to explore the letter grid here.</p>
@@ -74,6 +70,18 @@
 
     <!-- Fixed download button -->
     <button type="button" id="download-grid-btn" class="download-btn" title="Download grid as JPG" aria-label="Download grid as JPG" hidden>⬇ JPG</button>
+
+    <!-- Pie chart drawer (left) -->
+    <aside id="pie-drawer" class="drawer drawer-left pie-drawer">
+      <div class="drawer-header">
+        <h2>Results chart</h2>
+        <button type="button" class="drawer-close" data-close="pie-drawer" aria-label="Close chart panel">✕</button>
+      </div>
+      <div class="drawer-body">
+        <canvas id="pie-canvas" width="200" height="200"></canvas>
+        <div id="pie-legend" class="pie-legend"></div>
+      </div>
+    </aside>
 
     <!-- Theme drawer (left) -->
     <aside id="theme-drawer" class="drawer drawer-left">
@@ -127,7 +135,6 @@
     <aside id="results-drawer" class="drawer drawer-right">
       <div class="drawer-header">
         <h2>Results</h2>
-        <button type="button" id="pie-toggle-btn" class="icon-btn icon-btn-sq" title="Toggle pie chart" aria-label="Toggle pie chart">🥧</button>
         <button type="button" class="drawer-close" data-close="results-drawer" aria-label="Close results panel">✕</button>
       </div>
       <div class="drawer-body">

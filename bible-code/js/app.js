@@ -77,12 +77,16 @@ const DRAWER_TOGGLES = {
   'results-drawer': 'toggle-results-btn',
   'favorites-drawer': 'toggle-favorites-btn',
   'search-drawer': 'toggle-search-btn',
+  'pie-drawer': 'pie-toggle-btn',
 };
 
 // Right-side drawers share the same slot, so opening one closes the other.
+// Left-side drawers are also exclusive with each other.
 const DRAWER_EXCLUSIVE = {
   'results-drawer': 'favorites-drawer',
   'favorites-drawer': 'results-drawer',
+  'pie-drawer': 'theme-drawer',
+  'theme-drawer': 'pie-drawer',
 };
 
 function setDrawerOpen(id, open) {
@@ -1806,8 +1810,7 @@ function setupDownloadBtn() {
 // Pie chart — shows result counts as a donut chart
 // ---------------------------------------------------------------------
 function updatePieChart() {
-  const wrap = document.getElementById('pie-wrap');
-  if (wrap.hidden) return;
+  if (!document.getElementById('pie-drawer').classList.contains('open')) return;
   drawPieChart();
 }
 
@@ -1914,20 +1917,10 @@ function drawPieChart() {
 }
 
 function setupPieChart() {
-  const toggleBtn = document.getElementById('pie-toggle-btn');
-  const wrap = document.getElementById('pie-wrap');
-  const closeBtn = document.getElementById('pie-close-btn');
-
-  toggleBtn.addEventListener('click', () => {
-    const show = wrap.hidden;
-    wrap.hidden = !show;
-    toggleBtn.classList.toggle('active', show);
-    if (show) drawPieChart();
-  });
-
-  closeBtn.addEventListener('click', () => {
-    wrap.hidden = true;
-    toggleBtn.classList.remove('active');
+  document.getElementById('pie-toggle-btn').addEventListener('click', () => {
+    const isOpen = document.getElementById('pie-drawer').classList.contains('open');
+    toggleDrawer('pie-drawer');
+    if (!isOpen) drawPieChart();
   });
 }
 
