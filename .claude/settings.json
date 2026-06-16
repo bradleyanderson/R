@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__474f3eaf-5683-4b9c-a98a-202d0af5108c__get_file_metadata",
+      "mcp__474f3eaf-5683-4b9c-a98a-202d0af5108c__search_files",
+      "mcp__474f3eaf-5683-4b9c-a98a-202d0af5108c__download_file_content",
+      "mcp__474f3eaf-5683-4b9c-a98a-202d0af5108c__list_recent_files",
+      "mcp__474f3eaf-5683-4b9c-a98a-202d0af5108c__read_file_content",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__graphql_query",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__graphql_schema",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__validate_graphql_codeblocks",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__graphql_mutation",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__search_products",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__search_collections",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__get-shop-info",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__get-product",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__get-collection",
+      "mcp__0e712ed0-4f5b-46f1-b31d-2b879852a758__get-inventory-levels",
+      "mcp__157f77c3-17ef-47c6-889c-f3826647a4a8__whoami",
+      "mcp__157f77c3-17ef-47c6-889c-f3826647a4a8__get_metadata",
+      "mcp__157f77c3-17ef-47c6-889c-f3826647a4a8__get_screenshot"
+    ]
+  }
+}
