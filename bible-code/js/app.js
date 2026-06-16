@@ -83,17 +83,21 @@ const DRAWER_TOGGLES = {
 // Right-side drawers share the same slot, so opening one closes the other.
 // Left-side drawers are also exclusive with each other.
 const DRAWER_EXCLUSIVE = {
-  'results-drawer': 'favorites-drawer',
-  'favorites-drawer': 'results-drawer',
-  'pie-drawer': 'theme-drawer',
-  'theme-drawer': 'pie-drawer',
+  'results-drawer': ['favorites-drawer'],
+  'favorites-drawer': ['results-drawer'],
+  'pie-drawer': ['theme-drawer', 'crossing-drawer'],
+  'theme-drawer': ['pie-drawer', 'crossing-drawer'],
+  'crossing-drawer': ['pie-drawer', 'theme-drawer'],
 };
 
 function setDrawerOpen(id, open) {
   document.getElementById(id).classList.toggle('open', open);
   const btnId = DRAWER_TOGGLES[id];
   if (btnId) document.getElementById(btnId).classList.toggle('active', open);
-  if (open && DRAWER_EXCLUSIVE[id]) setDrawerOpen(DRAWER_EXCLUSIVE[id], false);
+  if (open && DRAWER_EXCLUSIVE[id]) {
+    const excl = DRAWER_EXCLUSIVE[id];
+    (Array.isArray(excl) ? excl : [excl]).forEach(eid => setDrawerOpen(eid, false));
+  }
 }
 
 function openDrawer(id) {
@@ -1213,94 +1217,138 @@ function setupLayerMenu() {
 }
 
 // ---------------------------------------------------------------------
-// Overlap finder — jump the grid to where two or more searched words
-// cross (share a letter), or come closest together if none cross.
+// Crossing-words drawer — lists every index where 2+ searched words
+// share a letter. Opens a left drawer with a searchable scrollable list.
 // ---------------------------------------------------------------------
 function findOverlapView() {
-  const status = document.getElementById('overlap-status');
   const matches = state.flatMatches;
-
   if (matches.length === 0) {
-    status.textContent = 'Run a search first.';
+    document.getElementById('overlap-status').textContent = 'Run a search first.';
     return;
   }
-
-  const distinctTerms = new Set(matches.map((m) => m.term));
+  const distinctTerms = new Set(matches.map(m => m.term));
   if (distinctTerms.size < 2) {
-    status.textContent = 'Add a second search word and run the search again to look for overlaps.';
+    document.getElementById('overlap-status').textContent =
+      'Add a second search word and run the search again to look for overlaps.';
     return;
   }
 
-  // idx -> set of terms whose ELS line passes through this letter
-  const idxToTerms = new Map();
+  // Build index → [match] map
+  const idxToMatches = new Map();
   for (const m of matches) {
     for (const idx of m.indices) {
-      let set = idxToTerms.get(idx);
-      if (!set) { set = new Set(); idxToTerms.set(idx, set); }
-      set.add(m.term);
+      if (!idxToMatches.has(idx)) idxToMatches.set(idx, []);
+      idxToMatches.get(idx).push(m);
     }
   }
 
-  let bestIdx = null;
-  let bestCount = 1;
-  for (const [idx, terms] of idxToTerms) {
-    if (terms.size > bestCount) {
-      bestCount = terms.size;
-      bestIdx = idx;
+  // Collect all shared-letter crossings between different term indices
+  const crossings = [];
+  const seenPairs = new Set();
+  for (const [idx, mList] of idxToMatches) {
+    const byTerm = new Map();
+    for (const m of mList) {
+      if (!byTerm.has(m.termIndex)) byTerm.set(m.termIndex, m);
     }
-  }
-
-  let center, size, message;
-
-  if (bestIdx !== null) {
-    const here = matches.filter((m) => m.indices.includes(bestIdx));
-    let lo = Infinity, hi = -Infinity;
-    for (const m of here) {
-      for (const idx of m.indices) {
-        if (idx < lo) lo = idx;
-        if (idx > hi) hi = idx;
+    if (byTerm.size < 2) continue;
+    const entries = [...byTerm.entries()];
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        const [tiA, mA] = entries[i], [tiB, mB] = entries[j];
+        const pKey = [tiA, tiB].sort().join(':') + '@' + idx;
+        if (seenPairs.has(pKey)) continue;
+        seenPairs.add(pKey);
+        crossings.push({
+          idx, mA, mB,
+          labelA: mA.label || mA.term,
+          labelB: mB.label || mB.term,
+          colorA: state.allResults[tiA]?.color || '#888',
+          colorB: state.allResults[tiB]?.color || '#888',
+        });
       }
     }
-    const span = hi - lo;
-    center = Math.round((lo + hi) / 2);
-    size = clamp(Math.ceil(Math.sqrt(span + 1)) + 2, 4, 100);
-    const labels = Array.from(new Set(here.map((m) => m.label || m.term)));
-    message = `Found ${bestCount} words crossing at the same letter near ${refForIndex(bestIdx)}: "${labels.join('", "')}".`;
-  } else {
-    // No shared letters — find the closest pair of matches from different terms.
+  }
+
+  document.getElementById('crossing-count').textContent =
+    crossings.length === 0 ? 'No shared letters — showing nearest pair.' : `${crossings.length} crossing(s)`;
+
+  if (crossings.length === 0) {
+    // Fallback: jump to nearest pair
     const sorted = matches.slice().sort((a, b) => centerOfMatch(a) - centerOfMatch(b));
-    const lastSeen = new Map(); // term -> { center, match }
-    let bestDist = Infinity;
-    let bestPair = null;
+    const lastSeen = new Map();
+    let bestDist = Infinity, bestPair = null;
     for (const m of sorted) {
       const c = centerOfMatch(m);
       for (const [term, prev] of lastSeen) {
         if (term === m.term) continue;
         const dist = Math.abs(c - prev.center);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestPair = [prev.match, m];
-        }
+        if (dist < bestDist) { bestDist = dist; bestPair = [prev.match, m]; }
       }
       lastSeen.set(m.term, { center: c, match: m });
     }
-
-    const [m1, m2] = bestPair;
-    const allIdx = [...m1.indices, ...m2.indices];
-    const lo = Math.min(...allIdx);
-    const hi = Math.max(...allIdx);
-    const span = hi - lo;
-    center = Math.round((lo + hi) / 2);
-    size = clamp(Math.ceil(Math.sqrt(span + 1)) + 2, 4, 100);
-    message = `"${m1.label || m1.term}" and "${m2.label || m2.term}" don't share a letter, ` +
-      `but their closest occurrences come together near ${refForIndex(center)}.`;
+    if (bestPair) {
+      const allI = [...bestPair[0].indices, ...bestPair[1].indices];
+      const lo = Math.min(...allI), hi = Math.max(...allI);
+      const size = clamp(Math.ceil(Math.sqrt(hi - lo + 1)) + 2, 4, 100);
+      document.getElementById('grid-width').value = size;
+      document.getElementById('grid-height').value = size;
+      state.currentCenter = Math.round((lo + hi) / 2);
+      renderGrid();
+    }
+    document.getElementById('crossing-list').innerHTML =
+      '<p class="muted" style="padding:0.4rem 0">No letter-sharing crossings found. Grid centered on closest pair.</p>';
+    openDrawer('crossing-drawer');
+    document.getElementById('overlap-status').textContent = '';
+    return;
   }
 
-  document.getElementById('grid-width').value = size;
-  document.getElementById('grid-height').value = size;
-  state.currentCenter = center;
-  renderGrid();
-  status.textContent = message;
+  renderCrossingList(crossings, '');
+
+  const searchEl = document.getElementById('crossing-search');
+  searchEl.value = '';
+  searchEl.oninput = () => renderCrossingList(crossings, searchEl.value.trim().toLowerCase());
+
+  openDrawer('crossing-drawer');
+  document.getElementById('overlap-status').textContent = '';
+}
+
+function renderCrossingList(crossings, filter) {
+  const list = document.getElementById('crossing-list');
+  list.innerHTML = '';
+  const filtered = filter
+    ? crossings.filter(c =>
+        c.labelA.toLowerCase().includes(filter) || c.labelB.toLowerCase().includes(filter))
+    : crossings;
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<p class="muted" style="padding:0.4rem 0">No matches for that filter.</p>';
+    return;
+  }
+
+  for (const { idx, mA, mB, labelA, labelB, colorA, colorB } of filtered) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'crossing-item';
+    item.title = `Jump to crossing at ${refForIndex(idx)}`;
+    item.innerHTML =
+      `<span class="crossing-swatch" style="background:${colorA}"></span>` +
+      `<span class="crossing-name">${labelA}</span>` +
+      `<span class="crossing-x">×</span>` +
+      `<span class="crossing-swatch" style="background:${colorB}"></span>` +
+      `<span class="crossing-name">${labelB}</span>` +
+      `<span class="crossing-ref muted">${refForIndex(idx)}</span>`;
+    item.addEventListener('click', () => {
+      const allI = [...mA.indices, ...mB.indices];
+      const lo = Math.min(...allI), hi = Math.max(...allI);
+      const size = clamp(Math.ceil(Math.sqrt(hi - lo + 1)) + 2, 4, 100);
+      document.getElementById('grid-width').value = size;
+      document.getElementById('grid-height').value = size;
+      state.currentCenter = Math.round((lo + hi) / 2);
+      renderGrid();
+      closeDrawer('crossing-drawer');
+    });
+    list.appendChild(item);
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -1342,19 +1390,37 @@ function runCrosswordSearch() {
   const resultsEl = document.getElementById('crossword-results');
   resultsEl.innerHTML = '';
 
+  if (state.currentCenter === undefined) {
+    status.textContent = 'Run a search and open a grid view first.';
+    return;
+  }
   const table = document.querySelector('.els-grid');
-  if (state.currentCenter === undefined || !table) {
+  if (!cam3D.active && !table) {
     status.textContent = 'Run a search and open a grid view first.';
     return;
   }
 
-  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
-  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
-  const grid = buildGrid(state.currentCenter, rows, cols);
+  // In 3D mode use slider cols/rows and median center; otherwise use 2D toolbar values
+  let cols, rows, center;
+  if (cam3D.active) {
+    cols = clamp(parseInt(document.getElementById('slider-x-spread').value, 10) || 24, 4, 80);
+    rows = clamp(parseInt(document.getElementById('slider-y-spread').value, 10) || 24, 4, 80);
+    const allIdx = [];
+    for (const r of state.allResults) for (const m of r.matches) allIdx.push(...m.indices);
+    if (allIdx.length > 1) { allIdx.sort((a, b) => a - b); center = allIdx[Math.floor(allIdx.length / 2)]; }
+    else center = state.currentCenter;
+  } else {
+    cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
+    rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
+    center = state.currentCenter;
+  }
+  const grid = buildGrid(center, rows, cols);
   const topLeftIdx = grid[0][0].idx;
 
-  document.querySelectorAll('.els-grid td.cross').forEach((td) => td.classList.remove('cross'));
-  document.querySelectorAll('.els-line-cross, .els-line-cross-label').forEach((el) => el.remove());
+  if (!cam3D.active) {
+    document.querySelectorAll('.els-grid td.cross').forEach((td) => td.classList.remove('cross'));
+    document.querySelectorAll('.els-line-cross, .els-line-cross-label').forEach((el) => el.remove());
+  }
 
   const taggedTerms = new Set(state.allResults.map((r) => r.term));
   const found = [];
@@ -1409,50 +1475,11 @@ function runCrosswordSearch() {
     translated: null,
   }));
 
-  const svg = document.querySelector('.els-lines');
+  const svg = cam3D.active ? null : document.querySelector('.els-lines');
   const userLang = getUserLang();
 
   state.crosswordWords.forEach((cw, i) => {
     const { word, cells } = cw;
-    const points = [];
-    for (const cell of cells) {
-      const rel = cell.idx - topLeftIdx;
-      const r = Math.floor(rel / cols);
-      const c = rel % cols;
-      const td = table.rows[r]?.cells[c];
-      if (td) td.classList.add('cross');
-      points.push([cols - c - 0.5, r + 0.5]);
-    }
-
-    const line = document.createElementNS(SVG_NS, 'polyline');
-    line.setAttribute('points', points.map((p) => p.join(',')).join(' '));
-    line.setAttribute('class', 'els-line-cross');
-    line.setAttribute('stroke', cw.color);
-    line.style.opacity = cw.opacity;
-    line.dataset.cwIndex = String(i);
-    if (svg) svg.appendChild(line);
-
-    const mid = points[Math.floor(points.length / 2)];
-    const [x1, y1] = points[0];
-    const [x2, y2] = points[points.length - 1];
-    let angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
-    if (angle > 90) angle -= 180;
-    if (angle < -90) angle += 180;
-
-    const text = document.createElementNS(SVG_NS, 'text');
-    text.setAttribute('x', mid[0]);
-    text.setAttribute('y', mid[1]);
-    text.setAttribute('font-size', '0.32');
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('dominant-baseline', 'central');
-    text.setAttribute('transform', `rotate(${angle.toFixed(1)} ${mid[0]} ${mid[1]})`);
-    text.setAttribute('class', 'els-line-cross-label');
-    text.setAttribute('fill', cw.color);
-    text.style.opacity = cw.opacity;
-    text.dataset.cwIndex = String(i);
-    text.textContent = `${word} (${gematriaValue(word)})`;
-    if (svg) svg.appendChild(text);
-
     const chip = document.createElement('span');
     chip.className = 'preset';
     chip.title = refForIndex(cells[0].idx);
@@ -1460,12 +1487,56 @@ function runCrosswordSearch() {
     chip.style.borderColor = cw.color;
     resultsEl.appendChild(chip);
 
-    translateHebrewWord(word, userLang).then((translated) => {
-      if (!translated) return;
-      cw.translated = translated;
-      chip.textContent = `${word} (${gematriaValue(word)}) — ${translated}`;
-      text.textContent = `${translated} (${gematriaValue(word)})`;
-    });
+    if (!cam3D.active && svg) {
+      const points = [];
+      for (const cell of cells) {
+        const rel = cell.idx - topLeftIdx;
+        const r = Math.floor(rel / cols);
+        const c = rel % cols;
+        const td = table.rows[r]?.cells[c];
+        if (td) td.classList.add('cross');
+        points.push([cols - c - 0.5, r + 0.5]);
+      }
+      const line = document.createElementNS(SVG_NS, 'polyline');
+      line.setAttribute('points', points.map((p) => p.join(',')).join(' '));
+      line.setAttribute('class', 'els-line-cross');
+      line.setAttribute('stroke', cw.color);
+      line.style.opacity = cw.opacity;
+      line.dataset.cwIndex = String(i);
+      svg.appendChild(line);
+
+      const mid = points[Math.floor(points.length / 2)];
+      const [x1, y1] = points[0], [x2, y2] = points[points.length - 1];
+      let angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+      if (angle > 90) angle -= 180;
+      if (angle < -90) angle += 180;
+      const text = document.createElementNS(SVG_NS, 'text');
+      text.setAttribute('x', mid[0]); text.setAttribute('y', mid[1]);
+      text.setAttribute('font-size', '0.32');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'central');
+      text.setAttribute('transform', `rotate(${angle.toFixed(1)} ${mid[0]} ${mid[1]})`);
+      text.setAttribute('class', 'els-line-cross-label');
+      text.setAttribute('fill', cw.color);
+      text.style.opacity = cw.opacity;
+      text.dataset.cwIndex = String(i);
+      text.textContent = `${word} (${gematriaValue(word)})`;
+      svg.appendChild(text);
+
+      translateHebrewWord(word, userLang).then((translated) => {
+        if (!translated) return;
+        cw.translated = translated;
+        chip.textContent = `${word} (${gematriaValue(word)}) — ${translated}`;
+        text.textContent = `${translated} (${gematriaValue(word)})`;
+      });
+    } else {
+      translateHebrewWord(word, userLang).then((translated) => {
+        if (!translated) return;
+        cw.translated = translated;
+        chip.textContent = `${word} (${gematriaValue(word)}) — ${translated}`;
+        if (cam3D.active) renderThreeDView();
+      });
+    }
   });
 
   const more = found.length > shown.length ? ` (showing top ${shown.length} of ${found.length} by word length)` : '';
@@ -1473,6 +1544,7 @@ function runCrosswordSearch() {
 
   renderGridWordsMenu();
   updatePieChart();
+  if (cam3D.active) renderThreeDView();
 }
 
 function setupCrossword() {
@@ -2336,7 +2408,7 @@ function renderThreeDView() {
   const topLeftIdx     = grid[0][0].idx;
   const bottomRightIdx = grid[rows - 1][cols - 1].idx;
 
-  // Build per-index highlight map
+  // Build per-index highlight map (ELS matches + crossword words)
   const hlMap = new Map();
   for (const m of state.flatMatches) {
     const ri = state.allResults[m.termIndex];
@@ -2344,6 +2416,12 @@ function renderThreeDView() {
     for (const idx of m.indices) {
       if (idx >= topLeftIdx && idx <= bottomRightIdx && !hlMap.has(idx))
         hlMap.set(idx, ri.color);
+    }
+  }
+  for (const cw of state.crosswordWords) {
+    for (const cell of (cw.cells || [])) {
+      if (cell.idx >= topLeftIdx && cell.idx <= bottomRightIdx && !hlMap.has(cell.idx))
+        hlMap.set(cell.idx, cw.color);
     }
   }
 
@@ -2442,17 +2520,80 @@ function renderThreeDView() {
       fillQuad(ctx, top0, top1, top2, top3, color.startsWith('#') ? color : color);
     }
 
-    // Letter on top
-    if (ch_ && barH > 1) {
+    // Letter always visible regardless of bar height
+    if (ch_) {
       const mx = (top0.sx + top1.sx + top2.sx + top3.sx) / 4;
       const my = (top0.sy + top1.sy + top2.sy + top3.sy) / 4;
-      const fs = Math.max(7, Math.min(14, xSp * 0.45));
+      const fs = Math.max(6, Math.min(14, xSp * 0.45));
       ctx.font = `bold ${fs}px serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fillStyle = barH < 0.5 ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.92)';
       ctx.fillText(ch_, mx, my);
     }
+  }
+
+  // Draw 3D lines for ELS matches and crossword words
+  draw3DMatchLines(ctx, cw, ch, grid, topLeftIdx, cols, rows, xSp, ySp, zSc);
+}
+
+// ── 3D line overlay: draws match paths + labels on the pillar canvas ────
+function draw3DMatchLines(ctx, cw, ch, grid, topLeftIdx, cols, rows, xSp, ySp, zSc) {
+  const drawPath = (indices, color, label) => {
+    const pts = [];
+    for (const idx of indices) {
+      if (idx < topLeftIdx) continue;
+      const rel = idx - topLeftIdx;
+      const r = Math.floor(rel / cols), c = rel % cols;
+      if (r < 0 || r >= rows || c < 0 || c >= cols) continue;
+      const ch_ = grid[r]?.[c]?.char || '';
+      const barH = (letterValue(ch_) / 22) * zSc;
+      const wx = (c - cols / 2) * xSp + xSp / 2;
+      const wz = (r - rows / 2) * ySp + ySp / 2;
+      pts.push(proj3D(wx, -barH - 1.5, wz, cw, ch));
+    }
+    if (pts.length < 2) return;
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(pts[0].sx, pts[0].sy);
+    for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].sx, pts[k].sy);
+    ctx.stroke();
+    // Start-letter dot
+    ctx.beginPath();
+    ctx.arc(pts[0].sx, pts[0].sy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    // Label at midpoint
+    if (label) {
+      const mid = pts[Math.floor(pts.length / 2)];
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(mid.sx - tw / 2 - 2, mid.sy - 15, tw + 4, 13);
+      ctx.fillStyle = color;
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(label, mid.sx, mid.sy - 3);
+    }
+    ctx.restore();
+  };
+
+  for (const m of state.flatMatches) {
+    const ri = state.allResults[m.termIndex];
+    if (!ri) continue;
+    const gem = [...(m.term || '')].reduce((s, c) => s + (letterValue(c) || 0), 0);
+    const lbl = `${m.translated || m.label || m.term} (${gem})`;
+    drawPath(m.indices, ri.color, lbl);
+  }
+  for (const cww of state.crosswordWords) {
+    const indices = (cww.cells || []).map(c => c.idx);
+    const gem = [...(cww.word || '')].reduce((s, c) => s + (letterValue(c) || 0), 0);
+    const lbl = `${cww.translated || cww.word} (${gem})`;
+    drawPath(indices, cww.color, lbl);
   }
 }
 

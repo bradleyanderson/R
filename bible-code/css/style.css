@@ -1391,7 +1391,82 @@ button {
 }
 
 /* ---------------------------------------------------------------------
-   Pie chart widget (floating, top-left of grid stage)
+   Crossing Words drawer (left)
+   --------------------------------------------------------------------- */
+.crossing-drawer {
+  width: min(340px, 92vw);
+}
+.crossing-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+}
+.crossing-count-label {
+  font-size: 0.76rem;
+  margin: 0 0 0.4rem;
+}
+.crossing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.crossing-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.82rem;
+  transition: background 0.15s;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+.crossing-item:hover {
+  background: var(--btn-active-bg);
+  color: var(--btn-active-text);
+}
+.crossing-swatch {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.crossing-x {
+  font-weight: 700;
+  opacity: 0.5;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+.crossing-name {
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crossing-ref {
+  font-size: 0.72rem;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 0.3rem;
+}
+
+/* ─── Pie chart widget (floating, top-left of grid stage)
    --------------------------------------------------------------------- */
 .pie-drawer {
   width: min(260px, 85vw);

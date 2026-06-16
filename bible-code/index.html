@@ -92,6 +92,19 @@
     <!-- Fixed download button -->
     <button type="button" id="download-grid-btn" class="download-btn" title="Download grid as JPG" aria-label="Download grid as JPG" hidden>⬇ JPG</button>
 
+    <!-- Crossing Words drawer (left) -->
+    <aside id="crossing-drawer" class="drawer drawer-left crossing-drawer">
+      <div class="drawer-header">
+        <h2>Crossing Words</h2>
+        <button type="button" class="drawer-close" data-close="crossing-drawer" aria-label="Close crossing words panel">✕</button>
+      </div>
+      <div class="drawer-body">
+        <input type="search" id="crossing-search" class="crossing-search" placeholder="Filter crossings…" aria-label="Filter crossing words" />
+        <p id="crossing-count" class="muted crossing-count-label"></p>
+        <div id="crossing-list" class="crossing-list"></div>
+      </div>
+    </aside>
+
     <!-- Pie chart drawer (left) -->
     <aside id="pie-drawer" class="drawer drawer-left pie-drawer">
       <div class="drawer-header">
