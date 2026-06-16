@@ -59,10 +59,30 @@
         <button type="button" id="find-overlap-btn" class="secondary">Find crossing words</button>
         <button type="button" id="crossword-btn" class="secondary" title="Scan the entire grid for all Hebrew dictionary words">🔎 Open search</button>
         <button type="button" id="pie-toggle-btn" class="icon-btn icon-btn-sq" title="Toggle pie chart" aria-label="Toggle pie chart">🥧</button>
+        <div class="view-mode-wrap" role="group" aria-label="View mode">
+          <button type="button" id="view-2d-btn" class="icon-btn active" title="2D grid view">⊞ 2D</button>
+          <button type="button" id="view-3d-btn" class="icon-btn" title="3D rendered view">⬡ 3D</button>
+        </div>
+        <label class="heatmap-control" title="Heat map — green = positive Hebrew words, red = negative">
+          🌡 <input type="range" id="heatmap-slider" min="0" max="100" value="0" class="heatmap-slider-input" aria-label="Heat map opacity" />
+        </label>
         <span id="grid-info" class="muted"></span>
       </div>
       <div id="grid-container" class="grid-scroll">
         <p class="muted" id="grid-placeholder">Open "Search" below, run a search, then choose "View grid" on a result to explore the letter grid here.</p>
+      </div>
+      <div id="three-d-stage" class="three-d-stage" style="display:none">
+        <div class="three-d-controls">
+          <span class="muted three-d-hint">Drag to rotate · scroll to zoom</span>
+          <div class="three-d-mode-group">
+            <button type="button" class="three-d-mode-btn active" data-mode="gallery">🖼 Gallery</button>
+            <button type="button" class="three-d-mode-btn" data-mode="cube">📦 Cube</button>
+            <button type="button" class="three-d-mode-btn" data-mode="rubiks">🎲 Rubik's</button>
+          </div>
+        </div>
+        <div class="three-d-viewport" id="three-d-viewport">
+          <div class="three-d-scene" id="three-d-scene"></div>
+        </div>
       </div>
       <p id="overlap-status" class="muted"></p>
       <p id="status" class="status">Loading Torah text…</p>

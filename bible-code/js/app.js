@@ -966,9 +966,11 @@ function renderGrid() {
       `Highlighted cells show every searched word that falls inside this view, including ones that cross.`;
   }
 
-  // Show download button when grid is visible
-  document.getElementById('download-grid-btn').hidden = false;
+  // Show download button when grid is visible (only in 2D mode)
+  document.getElementById('download-grid-btn').hidden = viewMode3D.active;
   updatePieChart();
+  if (viewMode3D.active) renderThreeDView();
+  applyHeatmap();
 }
 
 // Build an SVG overlay with one polyline + start marker + label per match,
@@ -2145,6 +2147,257 @@ function setupGridHistory() {
 }
 
 // ---------------------------------------------------------------------
+// Heat map — positive / negative Hebrew word overlay
+// ---------------------------------------------------------------------
+const HEATMAP_POSITIVE = ['שלום','אהבה','טוב','ברכה','אמת','חיים','חסד','אמונה','שמחה','גאולה','ישועה','תקווה','אור','קדש','נצח','ישר','אמן','שיר','חן','חכמה'];
+const HEATMAP_NEGATIVE = ['רע','מות','חרב','דם','שנאה','עוון','חטא','קללה','שאול','אש','חושך','שקר','רצח','כזב','גאוה','פחד','אכזר','כעס','צרה','אסון'];
+
+function applyHeatmapToGrid(grid, opacity) {
+  grid.querySelectorAll('.hm-cell-overlay').forEach(el => el.remove());
+  if (opacity <= 0) return;
+
+  const rows = [...grid.querySelectorAll('tr')];
+  const numRows = rows.length;
+  if (!numRows) return;
+
+  const cellMatrix = rows.map(tr => [...tr.querySelectorAll('td')]);
+  const charMatrix = cellMatrix.map(row => row.map(td => {
+    const l = td.querySelector('.cell-letter');
+    return l ? l.textContent : '';
+  }));
+  const numCols = charMatrix[0]?.length || 0;
+  const score = new Float32Array(numRows * numCols);
+
+  const scanWords = (words, val) => {
+    for (const word of words) {
+      const chars = [...word];
+      for (const [dr, dc] of CROSS_DIRECTIONS) {
+        for (let r = 0; r < numRows; r++) {
+          for (let c = 0; c < numCols; c++) {
+            let ok = true;
+            const hits = [];
+            for (let k = 0; k < chars.length; k++) {
+              const nr = r + dr * k, nc = c + dc * k;
+              if (nr < 0 || nr >= numRows || nc < 0 || nc >= numCols || charMatrix[nr][nc] !== chars[k]) { ok = false; break; }
+              hits.push(nr * numCols + nc);
+            }
+            if (ok) hits.forEach(i => { score[i] += val; });
+          }
+        }
+      }
+    }
+  };
+  scanWords(HEATMAP_POSITIVE, 1);
+  scanWords(HEATMAP_NEGATIVE, -1);
+
+  cellMatrix.forEach((row, r) => {
+    row.forEach((td, c) => {
+      const s = score[r * numCols + c];
+      if (s === 0) return;
+      const ov = document.createElement('div');
+      ov.className = 'hm-cell-overlay';
+      const intensity = Math.min(Math.abs(s) * 0.25 + 0.15, 0.8) * opacity;
+      ov.style.cssText = `position:absolute;inset:0;pointer-events:none;border-radius:2px;background:${s > 0 ? '#00e87a' : '#ff3333'};opacity:${intensity}`;
+      td.style.position = 'relative';
+      td.appendChild(ov);
+    });
+  });
+}
+
+function applyHeatmap() {
+  const opacity = parseInt(document.getElementById('heatmap-slider').value, 10) / 100;
+  document.querySelectorAll('.els-grid').forEach(g => applyHeatmapToGrid(g, opacity));
+}
+
+function setupHeatmap() {
+  document.getElementById('heatmap-slider').addEventListener('input', applyHeatmap);
+}
+
+// ---------------------------------------------------------------------
+// 3D View
+// ---------------------------------------------------------------------
+const viewMode3D = { active: false, mode: 'gallery', rotX: -20, rotY: 25, scale: 1 };
+
+function switchViewMode(to3D) {
+  viewMode3D.active = to3D;
+  document.getElementById('view-2d-btn').classList.toggle('active', !to3D);
+  document.getElementById('view-3d-btn').classList.toggle('active', to3D);
+  document.getElementById('grid-container').style.display = to3D ? 'none' : '';
+  document.getElementById('three-d-stage').style.display = to3D ? 'flex' : 'none';
+  document.getElementById('download-grid-btn').hidden = to3D || state.currentCenter === undefined;
+  if (to3D && state.currentCenter !== undefined) renderThreeDView();
+}
+
+function switch3DMode(mode) {
+  viewMode3D.mode = mode;
+  document.querySelectorAll('.three-d-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  if (viewMode3D.active && state.currentCenter !== undefined) renderThreeDView();
+}
+
+function getAdjacentCenter(base, dRows, dCols, stride) {
+  return clamp(base + dRows * stride + dCols, 0, TorahData.text.length - 1);
+}
+
+function buildMiniGrid(center, rows, cols, matches) {
+  const { wrap } = buildSingleGrid(center, rows, cols, matches, null);
+  wrap.classList.add('panel-grid-wrap');
+  return wrap;
+}
+
+function makePanel3D(content, label, w, h) {
+  const el = document.createElement('div');
+  el.className = 'panel-3d';
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'panel-3d-label';
+    lbl.textContent = label;
+    el.appendChild(lbl);
+  }
+  el.appendChild(content);
+  return el;
+}
+
+function buildGallery(scene, panels, gRows, gCols) {
+  const pW = 210, pH = 210, pR = 10, pC = 10;
+  const spacing = 240;
+  const n = Math.max(panels.length, 1);
+  panels.forEach((p, i) => {
+    const content = buildMiniGrid(p.center, pR, pC, p.matches);
+    const panel = makePanel3D(content, p.label, pW, pH);
+    const offset = i - (n - 1) / 2;
+    panel.style.position = 'absolute';
+    panel.style.left = `${offset * spacing - pW / 2}px`;
+    panel.style.top = `-${pH / 2}px`;
+    const ry = offset * -10;
+    const tz = -Math.abs(offset) * 70;
+    panel.style.transform = `translateZ(${tz}px) rotateY(${ry}deg)`;
+    scene.appendChild(panel);
+  });
+}
+
+function buildCubeMode(scene, panels, gRows, gCols) {
+  const size = 200, half = size / 2;
+  const pR = 9, pC = 9;
+  const stride = Math.min(gCols, 50);
+  const c = state.currentCenter;
+  const faces = [
+    { label: 'Front',  tf: `translateZ(${half}px)`,                 center: c },
+    { label: 'Back',   tf: `rotateY(180deg) translateZ(${half}px)`, center: getAdjacentCenter(c, 0, pC * 2, stride) },
+    { label: 'Right',  tf: `rotateY(90deg) translateZ(${half}px)`,  center: getAdjacentCenter(c, 0, pC, stride) },
+    { label: 'Left',   tf: `rotateY(-90deg) translateZ(${half}px)`, center: getAdjacentCenter(c, 0, -pC, stride) },
+    { label: 'Top',    tf: `rotateX(90deg) translateZ(${half}px)`,  center: getAdjacentCenter(c, pR, 0, stride) },
+    { label: 'Bottom', tf: `rotateX(-90deg) translateZ(${half}px)`, center: getAdjacentCenter(c, -pR, 0, stride) },
+  ];
+  faces.forEach((face, i) => {
+    const src = panels[i] || { center: face.center, matches: state.flatMatches };
+    const content = buildMiniGrid(src.center, pR, pC, src.matches);
+    const panel = makePanel3D(content, face.label, size, size);
+    panel.classList.add('panel-cube-face');
+    panel.style.position = 'absolute';
+    panel.style.left = `-${half}px`;
+    panel.style.top = `-${half}px`;
+    panel.style.transform = face.tf;
+    scene.appendChild(panel);
+  });
+}
+
+function buildRubiksMode(scene, panels, gRows, gCols) {
+  const cellSz = 120, gap = 5, step = cellSz + gap;
+  const pR = 6, pC = 6;
+  const stride = Math.min(gCols, 50);
+  const c = state.currentCenter;
+  for (let z = -1; z <= 1; z++) {
+    for (let y = -1; y <= 1; y++) {
+      for (let x = -1; x <= 1; x++) {
+        const center = getAdjacentCenter(c, y * pR, x * pC, stride);
+        const src = panels.find((_, idx) => idx === (z + 1) * 9 + (y + 1) * 3 + (x + 1))
+          || { center, matches: state.flatMatches };
+        const content = buildMiniGrid(src.center, pR, pC, src.matches);
+        const panel = makePanel3D(content, null, cellSz, cellSz);
+        panel.classList.add('panel-rubiks-cell');
+        panel.style.position = 'absolute';
+        panel.style.left = `${x * step - cellSz / 2}px`;
+        panel.style.top = `${y * step - cellSz / 2}px`;
+        panel.style.transform = `translateZ(${z * step}px)`;
+        scene.appendChild(panel);
+      }
+    }
+  }
+}
+
+function applySceneRotation() {
+  const scene = document.getElementById('three-d-scene');
+  if (scene) scene.style.transform = `scale(${viewMode3D.scale}) rotateX(${viewMode3D.rotX}deg) rotateY(${viewMode3D.rotY}deg)`;
+}
+
+function setupSceneDrag() {
+  const vp = document.getElementById('three-d-viewport');
+  if (!vp) return;
+  // Clone to clear old listeners
+  const fresh = vp.cloneNode(false);
+  while (vp.firstChild) fresh.appendChild(vp.firstChild);
+  vp.parentNode.replaceChild(fresh, vp);
+  fresh.id = 'three-d-viewport';
+
+  let dragging = false, lx = 0, ly = 0;
+  fresh.addEventListener('mousedown', e => { dragging = true; lx = e.clientX; ly = e.clientY; e.preventDefault(); });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    viewMode3D.rotY += (e.clientX - lx) * 0.4;
+    viewMode3D.rotX -= (e.clientY - ly) * 0.4;
+    lx = e.clientX; ly = e.clientY;
+    applySceneRotation();
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  fresh.addEventListener('touchstart', e => { lx = e.touches[0].clientX; ly = e.touches[0].clientY; }, { passive: true });
+  fresh.addEventListener('touchmove', e => {
+    viewMode3D.rotY += (e.touches[0].clientX - lx) * 0.4;
+    viewMode3D.rotX -= (e.touches[0].clientY - ly) * 0.4;
+    lx = e.touches[0].clientX; ly = e.touches[0].clientY;
+    applySceneRotation();
+    e.preventDefault();
+  }, { passive: false });
+  fresh.addEventListener('wheel', e => {
+    viewMode3D.scale = clamp(viewMode3D.scale - e.deltaY * 0.001, 0.2, 3);
+    applySceneRotation();
+    e.preventDefault();
+  }, { passive: false });
+}
+
+function renderThreeDView() {
+  if (state.currentCenter === undefined) return;
+  const gCols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 100);
+  const gRows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 100);
+  const scene = document.getElementById('three-d-scene');
+  scene.innerHTML = '';
+
+  const panels = [
+    { center: state.currentCenter, matches: state.flatMatches, label: 'Primary' },
+    ...state.overlayMatches.map(({ match, label }) => ({
+      center: centerOfMatch(match), matches: [...state.flatMatches, match], label: label || match.term || '',
+    })),
+  ];
+
+  if (viewMode3D.mode === 'gallery') buildGallery(scene, panels, gRows, gCols);
+  else if (viewMode3D.mode === 'cube') buildCubeMode(scene, panels, gRows, gCols);
+  else buildRubiksMode(scene, panels, gRows, gCols);
+
+  applySceneRotation();
+  setupSceneDrag();
+
+  const heatOpacity = parseInt(document.getElementById('heatmap-slider').value, 10) / 100;
+  if (heatOpacity > 0) scene.querySelectorAll('.els-grid').forEach(g => applyHeatmapToGrid(g, heatOpacity));
+}
+
+function setup3DView() {
+  document.getElementById('view-2d-btn').addEventListener('click', () => switchViewMode(false));
+  document.getElementById('view-3d-btn').addEventListener('click', () => switchViewMode(true));
+  document.querySelectorAll('.three-d-mode-btn').forEach(btn => btn.addEventListener('click', () => switch3DMode(btn.dataset.mode)));
+}
+
+// ---------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------
 async function init() {
@@ -2165,6 +2418,8 @@ async function init() {
   setupGridHistory();
   setupDownloadBtn();
   setupPieChart();
+  setup3DView();
+  setupHeatmap();
   clearGrid();
 
   document.getElementById('grid-width').addEventListener('input', renderGrid);

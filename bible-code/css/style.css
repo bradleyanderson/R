@@ -1443,6 +1443,168 @@ button {
   white-space: nowrap;
 }
 
+/* ─── View mode 2D / 3D toggle ──────────────────────────────────────── */
+.view-mode-wrap {
+  display: flex;
+  gap: 0.15rem;
+  align-items: center;
+}
+
+.heatmap-control {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.heatmap-slider-input {
+  width: 70px;
+  accent-color: var(--gold, #c9a227);
+  vertical-align: middle;
+}
+
+/* ─── 3D Stage ───────────────────────────────────────────────────────── */
+.three-d-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.three-d-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.three-d-hint {
+  font-size: 0.74rem;
+  margin-right: auto;
+}
+
+.three-d-mode-group {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.three-d-mode-btn {
+  padding: 0.22rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.three-d-mode-btn.active,
+.three-d-mode-btn:hover {
+  background: var(--btn-active-bg);
+  color: var(--btn-active-text);
+  border-color: var(--btn-active-bg);
+}
+
+.three-d-viewport {
+  flex: 1;
+  perspective: 1100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  background: radial-gradient(ellipse at center,
+    color-mix(in srgb, var(--bg) 60%, var(--panel)) 0%,
+    var(--bg) 100%);
+}
+
+.three-d-viewport:active { cursor: grabbing; }
+
+.three-d-scene {
+  transform-style: preserve-3d;
+  position: relative;
+  width: 0;
+  height: 0;
+}
+
+/* ─── 3D Panels ──────────────────────────────────────────────────────── */
+.panel-3d {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 6px 30px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06);
+  backface-visibility: hidden;
+}
+
+/* Scale down the grid tables inside 3D panels */
+.panel-3d .grid-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.panel-3d .els-grid td {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font-size: 0;
+}
+
+.panel-3d .cell-letter {
+  font-size: 9px;
+}
+
+.panel-3d .cell-num {
+  display: none;
+}
+
+.panel-3d .els-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.panel-3d-label {
+  position: absolute;
+  bottom: 0.3rem;
+  left: 0.4rem;
+  font-size: 0.62rem;
+  color: var(--ink-light);
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.panel-cube-face {
+  border-radius: 3px;
+}
+
+.panel-rubiks-cell {
+  border-radius: 3px;
+  opacity: 0.92;
+}
+
+/* ─── Heat map cell overlay ──────────────────────────────────────────── */
+.hm-cell-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 2px;
+}
+
 /* pie chart toggle button in results drawer header */
 .drawer-header .icon-btn-sq {
   border: 1px solid var(--border);
