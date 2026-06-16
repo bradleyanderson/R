@@ -2316,13 +2316,23 @@ function renderThreeDView() {
     return;
   }
 
-  const cols = clamp(parseInt(document.getElementById('grid-width').value, 10) || 10, 4, 60);
-  const rows = clamp(parseInt(document.getElementById('grid-height').value, 10) || 10, 4, 60);
-  const xSp  = parseInt(document.getElementById('slider-x-spread').value, 10);
-  const ySp  = parseInt(document.getElementById('slider-y-spread').value, 10);
+  // Cols/rows driven by X/Y sliders; fixed spacing keeps cells readable at any size
+  const cols = clamp(parseInt(document.getElementById('slider-x-spread').value, 10) || 24, 4, 80);
+  const rows = clamp(parseInt(document.getElementById('slider-y-spread').value, 10) || 24, 4, 80);
   const zSc  = parseInt(document.getElementById('slider-z-height').value, 10);
+  const xSp  = 28;
+  const ySp  = 28;
 
-  const grid = buildGrid(state.currentCenter, rows, cols);
+  // Center on median of all match indices so every result is visible together
+  let center = state.currentCenter;
+  const allIdx = [];
+  for (const r of state.allResults) for (const m of r.matches) allIdx.push(...m.indices);
+  if (allIdx.length > 1) {
+    allIdx.sort((a, b) => a - b);
+    center = allIdx[Math.floor(allIdx.length / 2)];
+  }
+
+  const grid = buildGrid(center, rows, cols);
   const topLeftIdx     = grid[0][0].idx;
   const bottomRightIdx = grid[rows - 1][cols - 1].idx;
 
@@ -2366,7 +2376,7 @@ function renderThreeDView() {
 
   // Mode dispatch
   if (mode3D === 'cube')   { renderCubeMode(ctx, cw, ch, grid, hlMap, xSp, ySp, zSc); return; }
-  if (mode3D === 'rubiks') { renderRubiksMode(ctx, cw, ch, hlMap, xSp); return; }
+  if (mode3D === 'rubiks') { renderRubiksMode(ctx, cw, ch, hlMap, zSc * 4 + 10); return; }
   if (mode3D === 'matrix') {
     const chars = grid.flat().map(c => c.char).filter(Boolean);
     if (!chars.length) chars.push(...'אבגדהוזחטיכלמנסעפצקרשת');
