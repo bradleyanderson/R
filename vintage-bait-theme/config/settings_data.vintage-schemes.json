@@ -1,39 +1,36 @@
 {
-  "_comment": "Merge these entries into the top-level `color_schemes` object in config/settings_data.json. They back the `color_scheme` settings referenced by vintage-hero, vintage-collection-grid, and featured-collection in templates/index.json. Field names follow Dawn's color-scheme schema (Dawn 11+) — adjust keys if your Dawn version differs.",
-
+  "_comment": "Merge these entries into the top-level `color_schemes` object in config/settings_data.json. They back the `color_scheme` settings referenced by vintage-hero, vintage-collection-grid, and featured-collection in templates/index.json. Field names follow Dawn's color-scheme schema (Dawn 11+) \u2014 adjust keys if your Dawn version differs.",
   "scheme-1": {
     "settings": {
-      "background": "#F1E6D2",
+      "background": "#1A1014",
       "background_gradient": "",
-      "text": "#2E2A24",
-      "button": "#B5552B",
-      "button_label": "#F1E6D2",
-      "secondary_button_label": "#6B6B47",
-      "shadow": "#2E2A24"
+      "text": "#F0E6D3",
+      "button": "#C9485B",
+      "button_label": "#1A1014",
+      "secondary_button_label": "#8B1A2F",
+      "shadow": "#000000"
     }
   },
-
   "scheme-2": {
     "settings": {
-      "background": "#E3D5B8",
+      "background": "#231820",
       "background_gradient": "",
-      "text": "#2E2A24",
-      "button": "#6B6B47",
-      "button_label": "#F1E6D2",
-      "secondary_button_label": "#B5552B",
-      "shadow": "#2E2A24"
+      "text": "#F0E6D3",
+      "button": "#8B1A2F",
+      "button_label": "#F0E6D3",
+      "secondary_button_label": "#C9485B",
+      "shadow": "#000000"
     }
   },
-
   "scheme-3-tobacco": {
     "settings": {
-      "background": "#6E4A2E",
+      "background": "#4A1628",
       "background_gradient": "",
-      "text": "#F1E6D2",
+      "text": "#F0E6D3",
       "button": "#C9A227",
-      "button_label": "#2E2A24",
-      "secondary_button_label": "#F1E6D2",
-      "shadow": "#2E2A24"
+      "button_label": "#1A1014",
+      "secondary_button_label": "#F0E6D3",
+      "shadow": "#000000"
     }
   }
 }

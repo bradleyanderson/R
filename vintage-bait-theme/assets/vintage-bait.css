@@ -1,6 +1,6 @@
 /* ==========================================================================
    Vintage Bait — Design System
-   Faded earth-tone, worn-in aesthetic for the Vintage Bait Shopify theme.
+   Dark gothic romance aesthetic for the Vintage Bait Shopify theme.
 
    This stylesheet is additive: it sits alongside Dawn's base.css and only
    targets Vintage Bait's custom sections/snippets (prefixed `vb-`) plus a
@@ -9,17 +9,17 @@
    ========================================================================== */
 
 :root {
-  /* ---- Palette: faded earth tones ---------------------------------- */
-  --vb-cream: #f1e6d2;        /* parchment background */
-  --vb-cream-dark: #e3d5b8;   /* card / alternating section background */
-  --vb-olive: #6b6b47;        /* primary — faded olive */
-  --vb-olive-dark: #54543a;   /* hover/active state for olive */
-  --vb-rust: #b5552b;         /* accent / CTAs — sun-faded rust */
-  --vb-rust-dark: #93431f;    /* hover/active state for rust */
-  --vb-tobacco: #6e4a2e;      /* secondary — tobacco brown, borders, footer */
-  --vb-charcoal: #2e2a24;     /* primary text */
-  --vb-charcoal-soft: #5a4f43;/* secondary text */
-  --vb-mustard: #c9a227;      /* highlight — sale tags, vintage stamps */
+  /* ---- Palette: dark gothic romance ---------------------------------- */
+  --vb-cream: #1A1014;        /* near-black background, deep plum-black */
+  --vb-cream-dark: #231820;   /* card / alternating section background */
+  --vb-olive: #8B1A2F;        /* primary — deep crimson/burgundy */
+  --vb-olive-dark: #6B1223;   /* hover/active state for crimson */
+  --vb-rust: #C9485B;         /* accent / CTAs — rose-crimson */
+  --vb-rust-dark: #A3303F;    /* hover/active state for rose-crimson */
+  --vb-tobacco: #4A1628;      /* secondary — deep plum, borders, footer */
+  --vb-charcoal: #F0E6D3;     /* primary text — ivory/off-white */
+  --vb-charcoal-soft: #C4A882;/* secondary text — warm tan */
+  --vb-mustard: #c9a227;      /* highlight — antique gold, stamps */
 
   /* ---- Typography ---------------------------------------------------- */
   --vb-font-display: "Oswald", "Helvetica Neue", Arial, sans-serif;
@@ -27,9 +27,9 @@
   --vb-letter-spacing-wide: 0.08em;
 
   /* ---- Texture / depth ------------------------------------------------ */
-  --vb-grain-opacity: 0.05;
-  --vb-border-worn: 1px solid rgba(46, 42, 36, 0.18);
-  --vb-shadow-worn: 0 2px 6px rgba(46, 42, 36, 0.15), inset 0 0 0 1px rgba(110, 74, 46, 0.25);
+  --vb-grain-opacity: 0.07;
+  --vb-border-worn: 1px solid rgba(240, 230, 211, 0.12);
+  --vb-shadow-worn: 0 2px 6px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(74, 22, 40, 0.35);
 
   /* ---- Radii / spacing ------------------------------------------------- */
   --vb-radius: 6px;
@@ -86,7 +86,7 @@ button.shopify-payment-button__button--unbranded {
 .vb-btn:active,
 .button:active {
   transform: translateY(1px);
-  box-shadow: inset 0 0 0 1px rgba(110, 74, 46, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(74, 22, 40, 0.35);
 }
 
 .vb-btn--outline {
@@ -174,8 +174,8 @@ button.shopify-payment-button__button--unbranded {
   padding: var(--vb-section-gap) 1.5rem;
   background-color: var(--vb-cream-dark);
   background-image:
-    radial-gradient(ellipse at top left, rgba(181, 85, 43, 0.18), transparent 55%),
-    radial-gradient(ellipse at bottom right, rgba(107, 107, 71, 0.22), transparent 55%);
+    radial-gradient(ellipse at top left, rgba(139, 26, 47, 0.30), transparent 55%),
+    radial-gradient(ellipse at bottom right, rgba(74, 22, 40, 0.35), transparent 55%);
   border-bottom: 6px solid var(--vb-tobacco);
   overflow: hidden;
 }
@@ -245,7 +245,7 @@ button.shopify-payment-button__button--unbranded {
 
 .vb-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 18px rgba(46, 42, 36, 0.2), inset 0 0 0 1px rgba(110, 74, 46, 0.25);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(74, 22, 40, 0.35);
 }
 
 .vb-card__media {
