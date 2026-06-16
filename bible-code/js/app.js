@@ -2219,8 +2219,12 @@ function setupHeatmap() {
 // ---------------------------------------------------------------------
 const cam3D = { rotX: 0.45, rotY: 0.4, zoom: 1, active: false };
 let rafId3D = null;
+let mode3D = 'pillars';
+let matrixRaf = null;
+const matrixColState = [];
 
 function switchViewMode(to3D) {
+  if (!to3D && matrixRaf) { cancelAnimationFrame(matrixRaf); matrixRaf = null; }
   cam3D.active = to3D;
   document.getElementById('view-2d-btn').classList.toggle('active', !to3D);
   document.getElementById('view-3d-btn').classList.toggle('active', to3D);
@@ -2335,6 +2339,16 @@ function renderThreeDView() {
     scanH(HEATMAP_NEGATIVE, -1);
   }
 
+  // Mode dispatch
+  if (mode3D === 'cube')   { renderCubeMode(ctx, cw, ch, grid, hlMap, xSp, ySp, zSc); return; }
+  if (mode3D === 'rubiks') { renderRubiksMode(ctx, cw, ch, hlMap, xSp); return; }
+  if (mode3D === 'matrix') {
+    const chars = grid.flat().map(c => c.char).filter(Boolean);
+    if (!chars.length) chars.push(...'אבגדהוזחטיכלמנסעפצקרשת');
+    startMatrixMode(canvas, cw, ch, chars);
+    return;
+  }
+
   // Collect bars and sort back-to-front
   const bars = [];
   for (let r = 0; r < rows; r++) {
@@ -2407,6 +2421,121 @@ function renderThreeDView() {
   }
 }
 
+// ── Cube mode: grid cells spread across all 6 faces of a rotating cube ──
+function renderCubeMode(ctx, cw, ch, grid, hlMap, xSp, ySp, zSc) {
+  const R = zSc * 6 + 40;
+  const FACES = [
+    { ctr:[0,0,1],  rv:[1,0,0],  uv:[0,-1,0] },
+    { ctr:[0,0,-1], rv:[-1,0,0], uv:[0,-1,0] },
+    { ctr:[1,0,0],  rv:[0,0,-1], uv:[0,-1,0] },
+    { ctr:[-1,0,0], rv:[0,0,1],  uv:[0,-1,0] },
+    { ctr:[0,-1,0], rv:[1,0,0],  uv:[0,0,1]  },
+    { ctr:[0,1,0],  rv:[1,0,0],  uv:[0,0,-1] },
+  ];
+  const allCells = grid.flat();
+  const cPerFace = Math.ceil(allCells.length / 6);
+  const faceN = Math.max(1, Math.ceil(Math.sqrt(cPerFace)));
+  const sorted = FACES.map((f, fi) => {
+    const p = proj3D(f.ctr[0]*R, f.ctr[1]*R, f.ctr[2]*R, cw, ch);
+    return { ...f, fi, depth: p.depth };
+  }).sort((a, b) => b.depth - a.depth);
+
+  for (const face of sorted) {
+    const [cx,cy,cz] = face.ctr, [rx,ry,rz] = face.rv, [ux,uy,uz] = face.uv;
+    for (let fr = 0; fr < faceN; fr++) {
+      for (let fc = 0; fc < faceN; fc++) {
+        const cell = allCells[face.fi * cPerFace + fr * faceN + fc];
+        if (!cell) continue;
+        const u0=(fc/faceN)*2-1, u1=((fc+1)/faceN)*2-1;
+        const v0=(fr/faceN)*2-1, v1=((fr+1)/faceN)*2-1;
+        const pt = (u,v) => proj3D(cx*R+rx*R*u+ux*R*v, cy*R+ry*R*u+uy*R*v, cz*R+rz*R*u+uz*R*v, cw, ch);
+        const [p0,p1,p2,p3] = [pt(u0,v0),pt(u1,v0),pt(u1,v1),pt(u0,v1)];
+        fillQuad(ctx, p0, p1, p2, p3, hlMap.has(cell.idx) ? hlMap.get(cell.idx) : '#1a3050');
+        if (cell.char && faceN <= 10) {
+          const mx=(p0.sx+p1.sx+p2.sx+p3.sx)/4, my=(p0.sy+p1.sy+p2.sy+p3.sy)/4;
+          ctx.font = `bold ${Math.max(6,Math.floor(R/faceN*0.7))}px serif`;
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillStyle='rgba(255,255,255,0.9)';
+          ctx.fillText(cell.char, mx, my);
+        }
+      }
+    }
+  }
+}
+
+// ── Rubik's mode: 3×3×3 array of colored cubies ──────────────────────
+function renderRubiksMode(ctx, cw, ch, hlMap, xSp) {
+  const S = xSp, GAP = S * 0.1, TOTAL = S + GAP, h = S / 2;
+  const wordColors = [...new Set([...hlMap.values()])].slice(0, 6);
+  const RUB = ['#b90000','#ff6000','#ffd700','#009b48','#0045ad','#f0f0f0'];
+  const fc = fi => wordColors[fi] || RUB[fi];
+  const quads = [];
+  for (let xi = -1; xi <= 1; xi++) {
+    for (let yi = -1; yi <= 1; yi++) {
+      for (let zi = -1; zi <= 1; zi++) {
+        if (xi===0 && yi===0 && zi===0) continue;
+        const wx=xi*TOTAL, wy=yi*TOTAL, wz=zi*TOTAL;
+        const faceDefs = [
+          { n:[1,0,0],  fi:0, pts:[[wx+h,wy-h,wz-h],[wx+h,wy+h,wz-h],[wx+h,wy+h,wz+h],[wx+h,wy-h,wz+h]] },
+          { n:[-1,0,0], fi:1, pts:[[wx-h,wy-h,wz+h],[wx-h,wy+h,wz+h],[wx-h,wy+h,wz-h],[wx-h,wy-h,wz-h]] },
+          { n:[0,1,0],  fi:2, pts:[[wx-h,wy+h,wz-h],[wx-h,wy+h,wz+h],[wx+h,wy+h,wz+h],[wx+h,wy+h,wz-h]] },
+          { n:[0,-1,0], fi:3, pts:[[wx-h,wy-h,wz+h],[wx-h,wy-h,wz-h],[wx+h,wy-h,wz-h],[wx+h,wy-h,wz+h]] },
+          { n:[0,0,1],  fi:4, pts:[[wx-h,wy-h,wz+h],[wx+h,wy-h,wz+h],[wx+h,wy+h,wz+h],[wx-h,wy+h,wz+h]] },
+          { n:[0,0,-1], fi:5, pts:[[wx+h,wy-h,wz-h],[wx-h,wy-h,wz-h],[wx-h,wy+h,wz-h],[wx+h,wy+h,wz-h]] },
+        ];
+        for (const { n, fi, pts } of faceDefs) {
+          const outer=(n[0]!==0&&n[0]===xi)||(n[1]!==0&&n[1]===yi)||(n[2]!==0&&n[2]===zi);
+          const color = outer ? fc(fi) : '#0d1117';
+          const p = pts.map(([x,y,z]) => proj3D(x,y,z,cw,ch));
+          quads.push({ p, color, depth:(p[0].depth+p[1].depth+p[2].depth+p[3].depth)/4 });
+        }
+      }
+    }
+  }
+  quads.sort((a,b) => b.depth-a.depth);
+  for (const {p:[p0,p1,p2,p3],color} of quads) fillQuad(ctx,p0,p1,p2,p3,color);
+}
+
+// ── Matrix mode: animated Hebrew character rain ───────────────────────
+function startMatrixMode(canvas, cw, ch, gridChars) {
+  if (matrixRaf) { cancelAnimationFrame(matrixRaf); matrixRaf = null; }
+  const ctx = canvas.getContext('2d');
+  const SZ = 18, numCols = Math.ceil(cw / SZ);
+  matrixColState.length = 0;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, cw, ch);
+  for (let i = 0; i < numCols; i++) {
+    matrixColState.push({
+      x: (i + 0.5) * SZ,
+      y: Math.random() * ch * 1.5,
+      speed: 1.5 + Math.random() * 3.5,
+      chars: Array.from({length:24}, () => gridChars[Math.floor(Math.random()*gridChars.length)]),
+    });
+  }
+  function loop() {
+    if (mode3D !== 'matrix' || !cam3D.active) { matrixRaf = null; return; }
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(0, 0, cw, ch);
+    for (const col of matrixColState) {
+      col.y += col.speed * 1.2;
+      if (col.y > ch + SZ * 26) { col.y = -SZ * 6; col.speed = 1.5 + Math.random() * 3.5; }
+      if (Math.random() < 0.06)
+        col.chars[Math.floor(Math.random()*col.chars.length)] = gridChars[Math.floor(Math.random()*gridChars.length)];
+      for (let i = 0; i < col.chars.length; i++) {
+        const yp = col.y - i * SZ;
+        if (yp < -SZ || yp > ch + SZ) continue;
+        const a = i === 0 ? 1 : Math.max(0.04, 1 - i / col.chars.length);
+        ctx.fillStyle = i === 0 ? '#ffffff' : `rgba(0,230,100,${a.toFixed(2)})`;
+        ctx.font = `bold ${SZ-2}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText(col.chars[i], col.x, yp);
+      }
+    }
+    matrixRaf = requestAnimationFrame(loop);
+  }
+  matrixRaf = requestAnimationFrame(loop);
+}
+
 function setupSceneDrag3D() {
   const canvas = document.getElementById('three-d-canvas');
   if (!canvas) return;
@@ -2446,6 +2575,14 @@ function setup3DView() {
   document.getElementById('view-3d-btn').addEventListener('click', () => switchViewMode(true));
   ['slider-x-spread','slider-y-spread','slider-z-height'].forEach(id => {
     document.getElementById(id).addEventListener('input', () => { if (cam3D.active) renderThreeDView(); });
+  });
+  document.querySelectorAll('[data-mode3d]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (matrixRaf) { cancelAnimationFrame(matrixRaf); matrixRaf = null; }
+      mode3D = btn.dataset.mode3d;
+      document.querySelectorAll('[data-mode3d]').forEach(b => b.classList.toggle('active', b === btn));
+      if (cam3D.active) renderThreeDView();
+    });
   });
   setupSceneDrag3D();
   window.addEventListener('resize', () => { if (cam3D.active) renderThreeDView(); });

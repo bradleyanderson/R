@@ -67,6 +67,12 @@
           🌡 <input type="range" id="heatmap-slider" min="0" max="100" value="0" class="heatmap-slider-input" aria-label="Heat map opacity" />
         </label>
         <div id="three-d-sliders" class="three-d-sliders" style="display:none">
+          <div class="three-d-mode-group">
+            <button type="button" class="three-d-mode-btn active" data-mode3d="pillars">🏛 Pillars</button>
+            <button type="button" class="three-d-mode-btn" data-mode3d="cube">📦 Cube</button>
+            <button type="button" class="three-d-mode-btn" data-mode3d="rubiks">🎲 Rubik's</button>
+            <button type="button" class="three-d-mode-btn" data-mode3d="matrix">🔢 Matrix</button>
+          </div>
           <label title="X cell spacing">X <input type="range" id="slider-x-spread" min="10" max="80" value="28" /></label>
           <label title="Y cell spacing">Y <input type="range" id="slider-y-spread" min="10" max="80" value="28" /></label>
           <label title="Bar height scale">Z <input type="range" id="slider-z-height" min="1" max="40" value="8" /></label>
